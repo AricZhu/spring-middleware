@@ -10,9 +10,13 @@ public class BizException extends RuntimeException {
     }
 
     public BizException(Integer code, String message) {
-        super(message);
         this.code = code;
         this.message = message;
+    }
+
+    public BizException(Throwable e) {
+        this.code = ErrorCode.SYSTEM_ERROR.getCode();
+        this.message = e.getMessage();
     }
 
     public Integer getCode() {

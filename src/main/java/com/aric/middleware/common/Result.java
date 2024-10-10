@@ -31,6 +31,10 @@ public class Result {
         return new Result(ErrorCode.SYSTEM_ERROR.getCode(), ErrorCode.SYSTEM_ERROR.getMessage(), null);
     }
 
+    public static Result fail(ErrorCode errorCode) {
+        return new Result(errorCode.getCode(), errorCode.getMessage(), null);
+    }
+
     public static Result fail(Integer errorCode, String errorMsg) {
         return new Result(errorCode, errorMsg, null);
     }

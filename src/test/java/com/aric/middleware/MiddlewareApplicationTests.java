@@ -10,4 +10,10 @@ class MiddlewareApplicationTests {
 	void contextLoads() {
 	}
 
+	@Test
+	void testHystrix() {
+		HystrixDemo hystrixDemo = new HystrixDemo("Bob", 500);
+		String ret = hystrixDemo.execute();
+		System.out.println(ret);
+	}
 }
