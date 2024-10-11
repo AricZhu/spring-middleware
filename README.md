@@ -29,12 +29,22 @@
 本章实现的超时熔断功能是在 **Netflix** 公司的开源框架 `Hystrix` 的基础上进行的封装，通过注解 + AOP 的方式，使超时熔断更加易于使用。下面简单介绍下 `Hystrix` 的原理与使用
 
 ### Hystrix 的原理与使用
+
+maven 依赖包地址如下：
+```xml
+<dependency>
+    <groupId>com.netflix.hystrix</groupId>
+    <artifactId>hystrix-core</artifactId>
+    <version>1.5.18</version>
+</dependency>
+```
+
 `Hystrix` 工作时有以下三个状态：
 * 关闭：所有请求直接通过
 * 全开：当服务错误达到阈值时，进入全开状态，产生熔断，此时所有请求均降级返回
 * 半开：处于全开状态下，经过阈值窗口时间后，会先处于半开状态，在本状态下，会放过一个请求，如果请求能正常返回，则后续变为关闭状态，否则回到全开状态
 
-![本地图片](./doc/images/hystrix-state.png)
+![hystrix 状态机](./doc/images/hystrix-state.png)
 
 `Hystrix` 的使用主要有命令模式和注解模式两种。下面详细介绍命令模式的使用：
 
@@ -60,11 +70,86 @@
 
 **注意点:**
 
-在超时时长的设置中，由于同一个 key 只能设置一次，因此为了能支持对不同方法设置不同时长，我们将方法名称作为 key 值传入，如下：
+在超时时长的设置中，由于同一个 key 只能设置一次，因此为了能支持对不同方法设置不同时长，我们将 "类名.方法名" 称作为 key 值传入，如下：
 ```
 super(Setter.withGroupKey(HystrixCommandGroupKey.Factory.asKey("ExampleGroup"))
-                // 通过方法名来实现不同时长的设置
+                // 通过 "类名.方法名" 来实现不同方法的超时时长的设置: String commandKey = jp.getTarget().getClass().getName() + "." + jp.getSignature().getName();
                 .andCommandKey(HystrixCommandKey.Factory.asKey(commandKey))
                 .andCommandPropertiesDefaults(HystrixCommandProperties.Setter()
                         .withExecutionTimeoutInMilliseconds(timeoutMs)));
 ```
+
+
+## 服务限流
+服务在线上跑的时候，一般都是有性能上限的，比如某个服务 A 最大只能应对 100 QPS 的请求，但如果此时一瞬间有大流量进来，比如有 2000 QPS 的请求进来，那么服务一下子就被打崩溃了
+
+对于上述这种问题，我们一般采用限流的方式来解决，所以本章我们就来实现限流
+
+### 限流算法
+
+常见的限流算法有以下三种：
+1. 计数器法
+2. 漏桶算法
+3. 令牌桶
+
+**计数器法**: 计数器法限流比较简单粗暴，比如我们现在要限流 100QPS/s，那么从接收到第一个请求开始计数，每接收一个请求，计数加 1，当在 1s 内接收到 100 个请求后，后续所有的请求则全部直接丢弃，直到下一个 1s 的到来又开始重新计数
+这种方式的缺点是后续的请求会被全部放弃掉，就像一个突刺一样，我们称之为突刺现象
+
+**漏桶算法**：所有请求到来时先进入漏桶中（可以用队列实现桶），然后以指定速率从桶中获取请求来处理。虽然请求到来的时间不确定，但由于处理的速度是确定的，因此也能达到限流的目的，当然在桶装满的情况下，后续的请求也会被丢弃掉。漏桶算法可以有效的解决突刺问题，但缺点是难以应对一开始的大流量问题
+
+![漏桶算法](./doc/images/leak-bucket.png)
+
+**令牌桶**: 令牌桶是在桶中以固定速率放入令牌，然后服务每次先从令牌痛中获取令牌，当获取到时则服务继续运行，如果获取不到则原地等待或者直接返回异常，通过控制令牌放入桶中的速率，可以达到限流的目的。由于令牌痛一开始是装满令牌的，因此可以应对一开始的大流量问题
+
+![令牌桶](./doc/images/token-bucket.png)
+
+### 限流实现
+本章实现的限流功能是基于 guava 的 `RateLimiter`限流工具的封装，它本身使用令牌桶算法，依赖包地址如下：
+
+```xml
+<dependency>
+   <groupId>com.google.guava</groupId>
+   <artifactId>guava</artifactId>
+   <version>18.0</version>
+</dependency>
+```
+
+`RateLimiter` 的使用很简单，只需要通过 create 方法创建一个实例对象，然后调用 acquire（没有令牌时原地阻塞） 或者 tryAcquire（没有令牌直接返回 false） 方法获取令牌即可，示例如下：
+
+```java
+package com.aric.middleware;
+
+import com.google.common.util.concurrent.RateLimiter;
+
+public class RateLimiterDemo {
+    //每秒只发出 1 个令牌
+    private final RateLimiter rateLimiter = RateLimiter.create(1);
+
+    public void testLimit() {
+        int count = 0;
+        for (;;) {
+            if (rateLimiter.tryAcquire()) {
+                System.out.println(System.currentTimeMillis() / 1000);
+                count++;
+                if (count > 10) {
+                    break;
+                }
+            }
+        }
+    }
+
+    public static void main(String[] args) {
+        RateLimiterDemo rateLimiterDemo = new RateLimiterDemo();
+        rateLimiterDemo.testLimit();
+    }
+}
+
+```
+
+基于上述的 `RateLimiter`，我们现在可以封装自己的限流中间件。具体实现步骤如下：
+
+1. 定义注解类 `RateLimiterAnnotation`，用来给需要添加限流的方法使用，同时包含一个参数 permitPerSecond 来表示具体的限流值
+2. 定义限流封装类 `RateLimiterProcess`，实现核心的限流逻辑。
+    - 接收切面方法来调用具体的服务
+    - 维护一个 map，"类名.方法名" 作为 key，限流对象作为 value，限流参数由注解提供，最终实现针对不同方法具有不同的限流值
+3. 定义切面类 `RateLimiterProcessAop`，用来拦截所有有限流注解的方法，并传入上述的限流封装类中

@@ -1,6 +1,7 @@
 package com.aric.middleware.controller;
 
 import com.aric.middleware.annotation.HystrixAnnotation;
+import com.aric.middleware.annotation.RateLimiterAnnotation;
 import com.aric.middleware.annotation.WhiteListAnnotation;
 import com.aric.middleware.common.Result;
 import com.aric.middleware.configuration.WhiteListConfiguration;
@@ -46,5 +47,12 @@ public class MainController {
     public Result hystrixDemo3() throws InterruptedException {
         Thread.sleep(600);
         return Result.success("超时熔断默认值");
+    }
+
+    // 限流返回
+    @GetMapping("/ratelimit")
+    @RateLimiterAnnotation(permitPerSecond = 1)
+    public Result ratelimit() {
+        return Result.success("限流正常返回!");
     }
 }

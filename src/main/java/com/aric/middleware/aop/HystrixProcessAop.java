@@ -26,8 +26,8 @@ public class HystrixProcessAop {
     @Around("pointcut() && @annotation(hystrixAnnotation)")
     public Object doRouter(ProceedingJoinPoint jp, HystrixAnnotation hystrixAnnotation) {
         logger.info("### hystrix for method {}, and timeout is {}", jp.getSignature().getName(), hystrixAnnotation.timeoutMs());
-
-        HystrixProcess hystrixProcess = new HystrixProcess(jp, hystrixAnnotation.timeoutMs(), jp.getSignature().getName());
+        String commandKey = jp.getTarget().getClass().getName() + "." + jp.getSignature().getName();
+        HystrixProcess hystrixProcess = new HystrixProcess(jp, hystrixAnnotation.timeoutMs(), commandKey);
         return hystrixProcess.execute();
     }
 }

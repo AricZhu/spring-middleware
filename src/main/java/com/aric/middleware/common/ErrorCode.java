@@ -4,6 +4,7 @@ public enum ErrorCode {
     SYSTEM_ERROR(500001, "系统错误"),
     WHITE_LIST_ERROR(500002, "白名单拦截"),
     TIMEOUT_ERROR(500003, "超时熔断"),
+    RATELIMITER_ERROR(500004, "限流"),
     ;
     private final Integer code;
     private final String message;
