@@ -153,3 +153,38 @@ public class RateLimiterDemo {
     - 接收切面方法来调用具体的服务
     - 维护一个 map，"类名.方法名" 作为 key，限流对象作为 value，限流参数由注解提供，最终实现针对不同方法具有不同的限流值
 3. 定义切面类 `RateLimiterProcessAop`，用来拦截所有有限流注解的方法，并传入上述的限流封装类中
+
+## 自定义拦截方法
+本章我们实现自定义拦截方法，通过注解+切面的形式给用户提供更加方便的自定义逻辑的实现。
+
+### 实现
+1. 添加注解 `MethodExtAnnotation`，用来表示自定义方法的信息，其中参数 method 表示自定义的方法名称
+2. 添加切面类 `MethodExtProcessAop`，处理自定义逻辑：
+    * 首先从注解中获取到自定义方法的名称
+    * 根据名称获取到自定义方法，这里已经假设自定义方法的参数和当前方法的参数一致：`jp.getTarget().getClass().getMethod(methodName, method.getParameterTypes());`
+    * 判断方法返回时是否是 boolean，不是则抛出异常: `method.getReturnType().getName().equals("boolean")`
+    * 运行方法，再根据返回值是否为 true 决定继续运行还是直接返回
+3. 自定义逻辑使用如下：在运行方法 `queryUser` 时，会先运行方法 `doFilter`，当 `doFilter` 返回为 true 时，则 `queryUser` 正常返回，否则直接返回被拦截异常
+
+```java
+import com.aric.middleware.common.Result;
+
+class MethodExtDemo {
+   @MethodExtAnnotation(method = "doFilter")
+   public Result queryUser(String userId) {
+      return Result.success("查询用户: " + userId);
+   }
+
+   /**
+    * 自定义拦截方法
+    */
+   public boolean doFilter(String userId) {
+      if ("1234".equals(userId)) {
+         logger.info("拦截自定义用户 userId：{}", userId);
+         return false;
+      }
+      return true;
+   }
+}
+
+```

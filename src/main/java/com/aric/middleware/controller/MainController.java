@@ -1,6 +1,7 @@
 package com.aric.middleware.controller;
 
 import com.aric.middleware.annotation.HystrixAnnotation;
+import com.aric.middleware.annotation.MethodExtAnnotation;
 import com.aric.middleware.annotation.RateLimiterAnnotation;
 import com.aric.middleware.annotation.WhiteListAnnotation;
 import com.aric.middleware.common.Result;
@@ -54,5 +55,19 @@ public class MainController {
     @RateLimiterAnnotation(permitPerSecond = 1)
     public Result ratelimit() {
         return Result.success("限流正常返回!");
+    }
+
+    @GetMapping("/queryInfo")
+    @MethodExtAnnotation(method = "doFilter")
+    public Result queryInfo(@RequestParam("userId") String userId) {
+        return Result.success("查询用户: " + userId);
+    }
+
+    public boolean doFilter(String userId) {
+        if ("xiaohong".equals(userId) || "xiaoming".equals(userId)) {
+            return false;
+        }
+
+        return true;
     }
 }
