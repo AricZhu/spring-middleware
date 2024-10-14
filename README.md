@@ -278,8 +278,8 @@ public class JdbcDemo {
         jdbcDemo.insertData("aric");
         jdbcDemo.insertData("xiaoming");
         jdbcDemo.fetchData();
-        jdbcDemo.updateData(3, "xiaoli");
-        jdbcDemo.deleteData(4);
+        jdbcDemo.updateData(1, "xiaoli");
+        jdbcDemo.deleteData(2);
     }
 }
 
