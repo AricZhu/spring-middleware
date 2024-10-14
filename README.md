@@ -188,3 +188,123 @@ class MethodExtDemo {
 }
 
 ```
+
+## ORM 框架实现
+数据库操作是我们实际业务中经常使用的，我们都用过 JDBC 的方式进行数据库操作，随着后面的学习，我们接触到了 iBatis、MyBatis，Hibernate 等优秀的数据库操作组件，这些都是 ORM 的具体实现。所以本章我们基于底层的 JDBC 自己封装一套 ORM 框架
+
+### JDBC 介绍
+在具体开发前，先来介绍下底层使用的 JDBC 组件。JDBC 组件是数据库的驱动，提供了对数据库的 CRUD 操作。下面以一个示例来具体说明 JDBC 的使用：
+
+```java
+package com.aric.middleware;
+
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+
+public class JdbcDemo {
+    private static final String URL = "jdbc:mysql://localhost:3306/demo";
+    private static final String USER = "root";
+    private static final String PASSWORD = "";
+
+    public void insertData(String name) {
+        String sql = "insert into users(name) values(?)";
+        try(
+                Connection conn = DriverManager.getConnection(URL, USER, PASSWORD);
+                PreparedStatement preparedStatement = conn.prepareStatement(sql);
+        ) {
+            preparedStatement.setString(1, name);
+            preparedStatement.executeUpdate();
+            System.out.println("Inserted: " + name);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    public void fetchData() {
+        String sql = "select * from users;";
+
+        try (
+                Connection conn = DriverManager.getConnection(URL, USER, PASSWORD);
+                PreparedStatement preparedStatement = conn.prepareStatement(sql);
+        ) {
+            ResultSet resultSet = preparedStatement.executeQuery();
+            System.out.println("fetch data: id  name");
+            while (resultSet.next()) {
+                int id = resultSet.getInt("id");
+                String name = resultSet.getString("name");
+                System.out.println(id + ", " + name);
+            }
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    public void updateData(int id, String name) {
+        String sql = "update users set name = ? where id = ?";
+
+        try (
+                Connection conn = DriverManager.getConnection(URL, USER, PASSWORD);
+                PreparedStatement preparedStatement = conn.prepareStatement(sql);
+        ) {
+            preparedStatement.setString(1, name);
+            preparedStatement.setInt(2, id);
+
+            preparedStatement.executeUpdate();
+            System.out.println("update for id = " + id + ", name = " + name);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    public void deleteData(int id) {
+        String sql = "delete from users where id = ?";
+        try (
+                Connection conn = DriverManager.getConnection(URL, USER, PASSWORD);
+                PreparedStatement preparedStatement = conn.prepareStatement(sql);
+        ) {
+            preparedStatement.setInt(1, id);
+            int i = preparedStatement.executeUpdate();
+            System.out.println("delete id: " + id + ", result: " + i);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    public static void main(String[] args) {
+        JdbcDemo jdbcDemo = new JdbcDemo();
+        jdbcDemo.insertData("aric");
+        jdbcDemo.insertData("xiaoming");
+        jdbcDemo.fetchData();
+        jdbcDemo.updateData(3, "xiaoli");
+        jdbcDemo.deleteData(4);
+    }
+}
+
+```
+
+通过上述的 CRUD 操作，我们知道使用 JDBC 对数据库进行操作主要分以下 4 步：
+1. 连接到数据库：获取到连接对象 `Connection`
+2. 预编译：我们调用 prepareStatement 这个 API 来对 SQL 语句执行预编译，并获取到预编译对象 `PreparedStatement`。执行预编译有很多好处，可以提高重复执行的效率，也可以防止 SQL 注入等
+3. 设置参数：如果 SQL 语句中带有参数，那么这时候我们就需要设置参数，常见的方法如下，如果没有参数则不用执行
+   * setInt(int parameterIndex, int x)：设置 int 类型参数
+   * setString(int parameterIndex, String x)：设置 String 类型参数
+   * setDouble(int parameterIndex, double x)：设置 double 类型参数
+   * setDate(int parameterIndex, Date x)：设置 Date 类型参数
+4. 执行 SQL 语句：有两种 API 来执行语句：
+   * executeQuery()：执行查询，返回 ResultSet
+   * executeUpdate()：用于执行 DML 语句（如 INSERT、UPDATE、DELETE），返回更新的行数
+
+对于数据库执行返回的结果对象 `ResultSet` 是一个可以遍历的对象，允许我们逐行读取结果集中的数据
+
+通常，我们先使用 next() 方法来移动到结果集中的下一行，返回 true 如果有下一行，返回 false 如果到达结果集的末尾
+
+然后我们使用下面的 API 来访问列数据：
+* getString(int columnIndex)：根据列的索引获取字符串类型的数据。
+* getInt(String columnName)：根据列名获取整型数据。
+* getDouble(int columnIndex)：根据列索引获取双精度浮点数。
+* getDate(String columnLabel)：根据列名获取日期数据。
+
+### ORM 整体设计
