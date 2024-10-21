@@ -354,7 +354,7 @@ classDiagram
         + SqlSession openSession()
     }
     class SqlSessionFactoryBuilder {
-        + SqlSessionFactory build(String resource)
+        + SqlSessionFactory build(Reader reader)
         - Configuration parseConfiguration(Element root)
         - Map<String, String> dataSource(List<Element> list)
         - Connection connection(Map<String, String> dataSource)
@@ -387,7 +387,6 @@ classDiagram
    SqlSessionFactoryBuilder ..> SqlSessionFactory: 依赖
    SqlSessionFactoryBuilder ..> Configuration: 依赖
    SqlSessionFactoryBuilder ..> XNode: 依赖
-   SqlSessionFactoryBuilder ..> Resource: 依赖
    Configuration --> XNode: 关联
 ```
 
@@ -458,7 +457,7 @@ public class Demo {
     public void parse() {
        String sql = node.getText();
        Map<Integer, String> parameter = new HashMap<>();
-       Pattern pattern = Pattern.compile("(#\\{(.*?)})");
+       Pattern pattern = Pattern.compile("(#\\{(.*?)\\})");
        Matcher matcher = pattern.match(sql);
        for (int i = 1; matcher.find(); i++) {
           String g1 = matcher.group(1);
@@ -477,7 +476,7 @@ public class Demo {
 
 "buildParameter" 方法是用来完成 SQL 中变量的替换的。实现方式也比较简单：
 1. 如果输入对象 parameter 是普通的对象：Short、Integer、Long、String、Date，则直接调用 PreparedStatement 对象的 setShort、setLong 等方法进行参数替换
-2. 如果输入对象 parameter 是复杂对象是，先利用反射获取到输入对象的所有字段的值，并保存到 map 中
+2. 如果输入对象 parameter 是复杂对象是，先利用反射获取到输入对象的所有字段的值，并保存到 map 中。注意：在获取字段值时，需要先调用 field.setAccessible(true) 将字段设置为公共
 3. 然后遍历参数列表 parameterMap，根据参数名从上述的 map 中获取到对应的参数值，然后再根据参数值的类型去调用第一步中的对应 API 进行参数的替换
 
 至此就完成了对 SQL 参数的替换

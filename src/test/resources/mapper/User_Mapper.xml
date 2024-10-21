@@ -8,6 +8,13 @@
         where id = #{id}
     </select>
 
+    <select id="queryUserInfoByUserIdAndNickname" parameterType="Object" resultType="com.aric.middleware.mybatis.po.User">
+        SELECT id, userId, userNickName, userHead, userPassword, createTime
+        FROM user
+        where userId = #{userId} and userNickName = #{userNickName}
+
+    </select>
+
     <select id="queryUserList" parameterType="java.lang.String" resultType="com.aric.middleware.mybatis.po.User">
         SELECT id, userId, userNickName, userHead, userPassword, createTime, updateTime
         FROM user

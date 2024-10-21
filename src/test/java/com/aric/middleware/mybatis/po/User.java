@@ -1,5 +1,7 @@
 package com.aric.middleware.mybatis.po;
 
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.Date;
 
 public class User {
@@ -9,8 +11,8 @@ public class User {
     private String userNickName;    // 昵称
     private String userHead;        // 头像
     private String userPassword;    // 密码
-    private Date createTime;        // 创建时间
-    private Date updateTime;        // 更新时间
+    private LocalDateTime createTime;        // 创建时间
+    private LocalDateTime updateTime;        // 更新时间
 
     public Long getId() {
         return id;
@@ -52,19 +54,19 @@ public class User {
         this.userPassword = userPassword;
     }
 
-    public Date getCreateTime() {
+    public LocalDateTime getCreateTime() {
         return createTime;
     }
 
-    public void setCreateTime(Date createTime) {
+    public void setCreateTime(LocalDateTime createTime) {
         this.createTime = createTime;
     }
 
-    public Date getUpdateTime() {
+    public LocalDateTime getUpdateTime() {
         return updateTime;
     }
 
-    public void setUpdateTime(Date updateTime) {
+    public void setUpdateTime(LocalDateTime updateTime) {
         this.updateTime = updateTime;
     }
 }
