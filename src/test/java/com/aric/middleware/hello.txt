@@ -1,0 +1,4 @@
+this is a file.
+hello &#$.
+<>
+你好!

@@ -190,10 +190,10 @@ class MethodExtDemo {
 ```
 
 ## ORM 框架实现
-数据库操作是我们实际业务中经常使用的，我们都用过 JDBC 的方式进行数据库操作，随着后面的学习，我们接触到了 iBatis、MyBatis，Hibernate 等优秀的数据库操作组件，这些都是 ORM 的具体实现。所以本章我们基于底层的 JDBC 自己封装一套 ORM 框架
+数据库操作是我们实际业务中经常使用的，我们都用过 JDBC 的方式进行数据库操作，随着后面的学习，我们接触到了 iBatis、MyBatis，Hibernate 等优秀的数据库操作组件，这些都是 ORM 的具体实现。本章我们基于底层的 JDBC 自己封装一套 ORM 框架
 
 ### JDBC 介绍
-在具体开发前，先来介绍下底层使用的 JDBC 组件。JDBC 组件是数据库的驱动，提供了对数据库的 CRUD 操作。下面以一个示例来具体说明 JDBC 的使用：
+在具体开发前，先来介绍下 JDBC 组件。JDBC 组件是数据库的驱动，提供了对数据库的 CRUD 操作。下面以一个示例来具体说明 JDBC 的使用：
 
 ```java
 package com.aric.middleware;
@@ -286,8 +286,8 @@ public class JdbcDemo {
 ```
 
 通过上述的 CRUD 操作，我们知道使用 JDBC 对数据库进行操作主要分以下 4 步：
-1. 连接到数据库：获取到连接对象 `Connection`
-2. 预编译：我们调用 prepareStatement 这个 API 来对 SQL 语句执行预编译，并获取到预编译对象 `PreparedStatement`。执行预编译有很多好处，可以提高重复执行的效率，也可以防止 SQL 注入等
+1. 连接到数据库：使用 "DriverManager.getConnection" 进行连接，并获取到连接对象 `Connection`
+2. 预编译：我们调用 "connection.prepareStatement(sql)" 方法来对 SQL 语句执行预编译，并获取到预编译对象 `PreparedStatement`。执行预编译有很多好处，可以提高重复执行的效率，也可以防止 SQL 注入等
 3. 设置参数：如果 SQL 语句中带有参数，那么这时候我们就需要设置参数，常见的方法如下，如果没有参数则不用执行
    * setInt(int parameterIndex, int x)：设置 int 类型参数
    * setString(int parameterIndex, String x)：设置 String 类型参数
@@ -308,3 +308,210 @@ public class JdbcDemo {
 * getDate(String columnLabel)：根据列名获取日期数据。
 
 ### ORM 整体设计
+
+整个 ORM 框架需要包含以下几部分：
+* xml 配置文件的解析，节点信息的保存
+* 数据库的连接操作
+* SQL 语句的解析执行和结果映射
+
+上述功能中数据库的连接，SQL 语句的解析和执行我们使用 JDBC 的 API 实现，其余部分都需要我们自己实现。我们根据上述的功能进行合理划分，得到下面的类和接口：
+* `Resource`、`XNode` 和 `Configuration`：分别表示资源类、xml 的节点类以及配置类
+* `SqlSession` 和 `DefaultSqlSession`：接口和实现类，用来实现 SQL 的解析、执行和结果映射
+* `SqlSessionFactory` 和 `DefaultSqlSessionFactory`：接口和实现类，用来实现数据库的连接操作
+* `SqlSessionFactoryBuilder`：实现读取配置，解析并构造需要的类
+
+#### 类整体设计
+
+```mermaid
+classDiagram
+    class SqlSession {
+       <<接口>>
+        + <T> T selectOne(String statement)
+        + <T> T selectOne(String statement, Object parameter)
+        + <T> List<T> selectList(String statement)
+        + <T> List<T> selectList(String statement, Object parameter)
+        + void close()
+    }
+    class DefaultSqlSession {
+        - Connection connection
+        - Map<String, XNode> mapperElement
+        
+        + <T> T selectOne(String statement)
+        + <T> T selectOne(String statement, Object parameter)
+        + <T> List<T> selectList(String statement)
+        + <T> List<T> selectList(String statement, Object parameter)
+        + void close()
+        
+        - void buildParameter(PreparedStatement preparedStatement, Object parameter, Map<Integer, String> parameterMap)
+        - <T> List<T> resultSet2Obj(ResultSet resultSet, Class<?> clazz)
+    }
+    class SqlSessionFactory {
+       <<接口>>
+       + SqlSession openSession()
+    }
+    class DefaultSqlSessionFactory {
+        - Configuration configuration
+        + SqlSession openSession()
+    }
+    class SqlSessionFactoryBuilder {
+        + SqlSessionFactory build(String resource)
+        - Configuration parseConfiguration(Element root)
+        - Map<String, String> dataSource(List<Element> list)
+        - Connection connection(Map<String, String> dataSource)
+        - Map<String, XNode> mapperElement(List<Element> list)
+        
+    }
+    class Configuration {
+        - Connection connection;
+        - Map<String, String> dataSource;
+        - Map<String, XNode> mapperElement;
+    }
+    class XNode {
+        - String namespace;
+        - String id;
+        - String parameterType;
+        - String resultType;
+        - String sql;
+        - Map<Integer, String> parameter;
+    }
+    class Resource {
+        + static Reader getResourceAsReader(String resource)
+        - static InputStream getResourceAsStream(String resource)
+        - static ClassLoader[] getClassLoaders()
+    }
+    
+   SqlSession <|.. DefaultSqlSession
+   SqlSession <.. SqlSessionFactory: 依赖
+   SqlSessionFactory <|.. DefaultSqlSessionFactory
+   DefaultSqlSessionFactory <-- Configuration: 关联
+   SqlSessionFactoryBuilder ..> SqlSessionFactory: 依赖
+   SqlSessionFactoryBuilder ..> Configuration: 依赖
+   SqlSessionFactoryBuilder ..> XNode: 依赖
+   SqlSessionFactoryBuilder ..> Resource: 依赖
+   Configuration --> XNode: 关联
+```
+
+#### 关键步骤的实现
+**xml 配置文件读取**
+
+我们通过 `Resource` 类来实现资源的读取，具体是通过 `ClassLoader` 来加载字节流 `InputStream`，然后再转换为方便读取的字符流 `InputStreamReader`，如下:
+```java
+// 通过 ClassLoader 加载字节流
+InputStream inputStream = classLoader.getResourceAsStream(resource);
+
+// 字节流转换为字符流
+Reader reader = new InputStreamReader(inputStream);
+```
+
+**xml 配置文件解析**
+
+我们借助工具 dom4j 来实现对 xml 文件的解析：
+1. 先从上一步中获取到的字符流 `Reader` 创建对象 `SAXReader`
+2. 创建文档对象 `Document`
+3. 从文档对象获取到根节点 `Element`
+4. 在根节点上获取我们感兴趣的节点，使用方法 "selectNodes(nodeName)" 即可，我们也可以在节点名前增加 "//" 来直接选择子孙节点: "selectNodes("//nodeName")"
+5. 通过 "content()" 方法获取到当前节点的所有子节点
+6. 通过 "attributeValue(name)" 获取当前节点的属性
+
+```java
+import javax.swing.text.Element;
+
+Reader reader = Resources.getResourceAsReader(resource);
+
+SAXReader saxReader = new SAXReader();
+
+Document document = saxReader.read(new InputSource(reader));
+
+Element root = document.getRootElement();
+
+List<Element> nodes = root.selectNodes("mappers");
+
+List nodeChildren = nodes.get(0).content();
+
+String id = (Element)(nodeChildren.get(0)).attributeValue("id");
+
+String text = (Element)(nodeChildren.get(0)).getText(); // 获取节点的 text 内容
+```
+
+**XNode 节点的解析**
+
+XNode 节点存储了我们需要的所有的 SQL 相关的信息，包括 sql 语句，输入参数，输出类型等，一个实际的例子如下：
+```xml
+ <select id="queryUserInfoById" parameterType="java.lang.Long" resultType="com.aric.middleware.mybatis.po.User">
+     SELECT id, userId, userNickName, userHead, userPassword, createTime
+     FROM user
+     where id = #{id}
+ </select>
+```
+
+为了存储上述的信息，XNode 类中定义了如下属性：
+* String namespace: 命名空间，用来区分不同的配置文件
+* String id: 当前 sql 语句的唯一标识，结合上述的 namespace，可以作为全局唯一标识: "namespace.id"
+* String parameterType: 表示参数类型，一般如果只有一个参数，则可以直接使用简单对象 Long、String 等，如果 sql 中有多个参数，则使用对象或者 Map 类型的数据，存放不同的类型
+* String resultType: sql 执行返回的结果类型
+* String sql: 具体的 sql 语句
+* Map<Integer, String> parameter: 存放 sql 中需要的参数
+
+下面重点讲述 sql 语句的参数的解析。为了能支持参数，我们这里以特殊符号 "#{}" 来表示参数，通过正则表达式来解析出 sql 语句中的参数，并将参数名保存至 map 接口中, index 作为 map 的 key，因为在 JDBC 中参数的设置也是以 index 作为 key 值，同时当前的参数替换为 "?"，处理后，当前的 SQL 语句就是标准的 JDBC 可以解析的了。如下：
+```java
+public class Demo {
+    public void parse() {
+       String sql = node.getText();
+       Map<Integer, String> parameter = new HashMap<>();
+       Pattern pattern = Pattern.compile("(#\\{(.*?)})");
+       Matcher matcher = pattern.match(sql);
+       for (int i = 1; matcher.find(); i++) {
+          String g1 = matcher.group(1);
+          String g2 = matcher.group(2);
+          // 保存参数到 map 中, 其中 i 作为 key，这样可以和 jdbc 中的 sql 参数一一对应
+          parameter.put(i, g2);
+
+          // 将自定义的参数类型 #{id} 替换为 JDBC 能处理的类型 ?
+          sql = sql.replace(g1, "?");
+       }
+    }
+}
+```
+
+**DefaultSqlSession 中的 buildParameter(PreparedStatement preparedStatement, Object parameter, Map<Integer, String> parameterMap) 实现**
+
+"buildParameter" 方法是用来完成 SQL 中变量的替换的。实现方式也比较简单：
+1. 如果输入对象 parameter 是普通的对象：Short、Integer、Long、String、Date，则直接调用 PreparedStatement 对象的 setShort、setLong 等方法进行参数替换
+2. 如果输入对象 parameter 是复杂对象是，先利用反射获取到输入对象的所有字段的值，并保存到 map 中
+3. 然后遍历参数列表 parameterMap，根据参数名从上述的 map 中获取到对应的参数值，然后再根据参数值的类型去调用第一步中的对应 API 进行参数的替换
+
+至此就完成了对 SQL 参数的替换
+
+**DefaultSqlSession 中的 resultSet2Obj(ResultSet resultSet, Class<?> clazz) 实现**
+
+"resultSet2Obj" 方法是将数据库查询结果转换为我们需要的对象类型。核心是遍历查询结果集，通过反射的方式将数据库中的结果映射到对象中，具体实现如下：
+1. 先获取数据库结果的相关信息 `ResultSetMetaData`，从中获取到返回的列数量等信息
+2. 从结果集 resultSet 中获取到当前列的值，并且通过列名拼接出对应对象的方法名，比如列名称为 "id"，则拼接出对象的方法名 "setId"
+3. 根据上述的方法名，从对象上获取到实际的方法，然后调用方法实现值的设置，如下：
+   ```
+   // 获取数据库结果信息
+   ResultSetMetaData metaData = resultSet.getMetaData();
+   
+   // 创建一个对象
+   (T) obj = (T) clazz.newInstance();
+   
+   // 获取到数据库列名
+   String columnName = metaData.getColumnName(i);
+
+   // 获取到当前数据库列的值
+   Object value = resultSet.getObject(i);
+   
+   // 拼接方法名
+   String methodName = "set" + columnName.substring(0, 1).toUpperCase() + columnName.substring(1); 
+   
+   // 通过反射获取到方法
+   if (value instanceof Timestamp) {
+     Method method = clazz.getMethod(methodName, Date.class); 
+   } else {
+     Method method = clazz.getMethod(methodName, value.getClass()); 
+   }
+   
+   // 调用方法设置值
+   method.invoke(obj, value);
+   ```
+
