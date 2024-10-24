@@ -514,3 +514,147 @@ public class Demo {
    method.invoke(obj, value);
    ```
 
+## ORM 框架与 Spring 的结合
+在上一章我们实现了一个 ORM 框架，能进行基本的 CRUD 操作以及完成参数和结果的映射。这一章我们需要将它集成到 Spring 框架中便于使用。同时我们知道在 mybatis 框架提供了一种快捷方便的方式操作数据库，即只提供接口定义，不需要具体的实现类就可以实现数据库的操作，示例如下：
+
+```java
+import org.springframework.stereotype.Component;
+
+// 定义数据库操作接口
+@Component
+public interface IUserDao {
+   User queryUserInfoById(Long id);
+}
+
+// 直接通过接口进行数据库的操作
+@Test
+public void test() {
+   BeanFactory beanFactory = new ClassPathXmlApplicationContext("spring-config.xml");
+   IUserDao userDao = beanFactory.getBean("IUserDao", IUserDao.class);
+   User user = userDao.queryUserInfoById(1L);
+   logger.info("测试结果：{}", JSON.toJSONString(user));
+}
+```
+
+上述例子中展示了在 mybatis 中是如何只通过一个接口，就可以进行数据库操作的方式。这个实现其实也不复杂，mybatis 框架会给这些接口都创建一个代理类，对这些接口的操作其实就是对代理类的操作，而在代理类中会调用具体的 ORM 框架去操作数据库
+
+下面我们来实现 mybatis 的这种功能。让我们的 ORM 框架更像 mybatis
+
+### 整体设计
+上文说到了接口操作的核心是代理类，所以我们首先需要一个配置扫描类，用来扫描所有需要代理的接口，并给这些接口添加代理类，其次需要一个代理类，用来代理接口的操作，最后我们还需要一个 ORM 操作类，在代理类中我们借助 ORM 操作类来实际操作 ORM 框架
+
+综上，mybatis-spring 框架的核心类有如下三个：
+1. `MapperScannerConfigurer`：配置扫描类，通过扫描指定路径下的所有接口，并为接口添加代理类
+2. `MapperFactoryBean`：接口的代理类，借助 ORM 操作类来实际操作 ORM
+3. `SqlSessionFactoryBean`：完成 `SqlSessionFactory` 类的初始化，并操作 ORM
+
+完整过程如下：
+我们首先通过 Spring 配置文件，将 `MapperScannerConfigurer` 和 `SqlSessionFactoryBean` 注册到 Spring 容器中，然后在 Bean 注册的时候，`MapperScannerConfigurer` 进行自定义的扫描注册 Bean，将所有需要的接口都设置代理类 `MapperFactoryBean`，而在 `MapperFactoryBean` 中会调用 `SqlSessionFactoryBean` 来进行 ORM 操作，这样就完成了 mybatis 集成到 Spring 的过程。
+
+![mybatis-spring架构图](doc/images/mybatis-spring.png)
+
+### 核心实现
+#### `SqlSessionFactoryBean` 类的实现
+`SqlSessionFactoryBean` 类是完成 `SqlSessionFactory` 类的初始化，并借此用来操作 ORM 的。我们通过实现 Spring 中的 FactoryBean 和 InitializingBean 这两个接口来完成该类的实例化
+* FactoryBean：用来创建 Spring 容器中的实例对象。我们在这个接口中完成了当前实例对象指向 `SqlSessionFactory` 对象
+* InitializingBean：在 Bean 对象配置完属性后的钩子操作。我们在这个接口中完成了 `SqlSessionFactory` 的实例化
+
+
+#### `MapperFactoryBean` 类的实现
+`MapperFactoryBean` 类是接口代理类，主要是代理 mybatis 的接口，并实现 ORM 操作。这里我们还是通过实现 FactoryBean 接口来完成类的实例化，并在其中完成代理类的创建。
+创建所需的被代理的接口以及 ORM 操作对象会在构造函数中注入，这个是由扫描类帮忙注入的。代理的实现逻辑也比较简单：
+1. 根据当前被代理的方法，获取到方法名，和接口全名进行拼接后，就得到了完整的操作名，即上一章的 "namespace.id"
+2. 根据方法是否有变量、返回是否是列表来决定选择需要的 ORM 的方法，即最终调用 SqlSession.selectOne 还是 SqlSession.selectList 
+
+代码实现如下：
+```java
+@Override
+public T getObject() throws Exception {
+  InvocationHandler handler = (proxy, method, args) -> {
+      System.out.println("你被代理了，执行SQL操作: " + method.getName());
+      // 获取全限定名
+      String statement = mapperInterface.getName() + "." + method.getName();
+
+      // 开启 ORM 操作
+      SqlSession sqlSession = sqlSessionFactory.openSession();
+
+      // 根据返回值和参数类型选择调用的 ORM 的 API
+      Class<?> returnType = method.getReturnType();
+      try {
+          // 无参数
+          if (null == args || args.length == 0) {
+              // 返回列表
+              if (List.class.isAssignableFrom(returnType)) {
+                  return sqlSession.selectList(statement);
+              } else { // 返回单个对象
+                  return sqlSession.selectOne(statement);
+              }
+          } else { // 有参
+              // 返回列表
+              if (List.class.isAssignableFrom(returnType)) {
+                  return sqlSession.selectList(statement, args[0]);
+              } else { // 返回单个对象
+                  return sqlSession.selectOne(statement, args[0]);
+              }
+          }
+      } finally {
+          sqlSession.close();
+      }
+  };
+
+  return (T) Proxy.newProxyInstance(Thread.currentThread().getContextClassLoader(), new Class[]{mapperInterface}, handler);
+}
+```
+
+#### `MapperScannerConfigurer` 类的实现
+`MapperScannerConfigurer` 是配置扫描类，用来解析配置，扫描出所有需要代理的 DAO 接口，修改 Bean 注册并添加上述的代理类，最终注册到 Spring 容器中。
+注意：在给接口添加代理的时候，还需要将当前接口，以及 ORM 操作对象 `SqlSessionFactory` 注入到代理类中的构造函数的参数中
+
+要自定义 Bean 的注册，我们需要实现 BeanDefinitionRegistryPostProcessor 接口，一个简单的例子如下，其中还包括添加构造函数的参数：
+```java
+// 定义一个简单的 Bean 类
+public class CustomBean {
+   private String name;
+   private Integer age;
+
+   public CustomBean(String name, Integer age) {
+      this.name = name;
+      this.age = age;
+   }
+
+   public void sayHello() {
+      System.out.println("hello world: " + name + ":" + age);
+   }
+}
+
+// 实现 BeanDefinitionRegistryPostProcessor
+@Component
+public class CustomBeanDefinitionRegistryPostProcessor implements BeanDefinitionRegistryPostProcessor {
+
+   @Override
+   public void postProcessBeanDefinitionRegistry(BeanDefinitionRegistry registry) throws BeansException {
+      // 创建 BeanDefinition
+      BeanDefinition beanDefinition = BeanDefinitionBuilder
+              .genericBeanDefinition(CustomBean.class)
+              .getBeanDefinition();
+   
+      // 添加构造函数的参数
+      beanDefinition.getConstructorArgumentValues().addGenericArgumentValue("xiaoming");
+      beanDefinition.getConstructorArgumentValues().addGenericArgumentValue(18);
+   
+      registry.registerBeanDefinition("customBean", beanDefinition);
+   }
+
+    @Override
+    public void postProcessBeanFactory(ConfigurableListableBeanFactory beanFactory) throws BeansException {
+        // 这个方法可以不实现
+    }
+}
+```
+上面的例子展示了如何自定义注册 Bean，接下来就是实现路径的扫描，并批量自定义注册 Bean。完整的实现过程如下：
+1. 首先我们使用 `PathMatchingResourcePatternResolver` 类来扫描类路径，它可以支持复杂路径的扫描
+2. 然后我们通过 `MetadataReader` 接口获取到类的元数据。它是 Spring 中用于读取和访问类的元数据信息的接口，是核心组件之一，可以在不加载类的情况下直接通过字节码获取到类的元数据，性能比较高
+3. 将上述步骤中读取到的元数据对象通过 `ScannedGenericBeanDefinition` 来加载出 BeanDefinition 对象
+4. 设置 BeanDefinition 的属性，包括设置构造参数等，供后续代理类使用，同时设置 beanClass 为我们的代理类 MapperFactoryBean
+5. 最后我们注册 BeanDefinition
+
