@@ -1,6 +1,5 @@
-package com.aric.middleware.mybatisSpring;
+package com.aric.middleware.mybatis.spring;
 
-import com.aric.middleware.mybatis.SqlSessionFactory;
 import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.config.BeanDefinitionHolder;
 import org.springframework.beans.factory.support.BeanDefinitionRegistry;
@@ -16,7 +15,6 @@ import java.beans.Introspector;
 
 public class MapperScannerConfigurer implements BeanDefinitionRegistryPostProcessor {
     private String basePackage;
-    private SqlSessionFactory sqlSessionFactory;
 
     @Override
     public void postProcessBeanDefinitionRegistry(BeanDefinitionRegistry registry) throws BeansException {
@@ -41,7 +39,6 @@ public class MapperScannerConfigurer implements BeanDefinitionRegistryPostProces
 
                 // 添加构造函数的操作，下面的代理对象需要使用到
                 beanDefinition.getConstructorArgumentValues().addGenericArgumentValue(beanDefinition.getBeanClassName());
-                beanDefinition.getConstructorArgumentValues().addGenericArgumentValue(sqlSessionFactory);
 
                 // 设置代理类为实际的 Bean 类
                 beanDefinition.setBeanClass(MapperFactoryBean.class);
@@ -58,9 +55,5 @@ public class MapperScannerConfigurer implements BeanDefinitionRegistryPostProces
 
     public void setBasePackage(String basePackage) {
         this.basePackage = basePackage;
-    }
-
-    public void setSqlSessionFactory(SqlSessionFactory sqlSessionFactory) {
-        this.sqlSessionFactory = sqlSessionFactory;
     }
 }

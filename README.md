@@ -658,3 +658,138 @@ public class CustomBeanDefinitionRegistryPostProcessor implements BeanDefinition
 4. 设置 BeanDefinition 的属性，包括设置构造参数等，供后续代理类使用，同时设置 beanClass 为我们的代理类 MapperFactoryBean
 5. 最后我们注册 BeanDefinition
 
+## 开发 ORM starter
+上面两章中我们开发了 ORM，并且将 ORM 集合到 Spring 框架中，但现在使用上还是比较繁琐，不仅要添加配置文件，还需要实例化 Bean 对象，初始化 `SqlSessionFactory` 等，所以在本章我们开发一个 Spring boot starter 插件，将上述的步骤自动化装配，这样后面使用的时候，就直接在 pom 中引入我们的 starter 依赖即可开箱使用
+
+在实际开发本章的 starter 前，先来介绍下 starter 以及它的开发流程。
+
+### 关于 Starter
+在传统的 Spring 框架使用中，我们要引入一个中间件，比如 Redis、Mybatis，需要做一系列的配置操作，以及 Bean 对象初始化等操作，引入的中间件一多，就成了配置地狱。所以为了解决这种配置繁琐的问题，官方推出了 Spring Boot，它秉承着约定大于配置的理念，通过一个个的 starter 让我们实现开箱即用，比如我们只需要在 pom 依赖中添加 spring-boot-starter-web，我们就可以使用 Spring MVC 的功能。
+
+而 starter 其实就是内部封装了所需的所有依赖，默认的配置，并帮我们自动初始化 Bean 对象，然后通过 spring.factories 文件来告诉 Spring 框架自动装配的路径，在 Spring 框架启动的时候运行我们的 starter 完成自动装配。一句话就是 starter 帮我们做了所有的脏活累活，所以我们才能优雅的使用
+
+### 开发一个 Starter 示例
+开发一个 Starter 其实很简单，主要有以下 4 个步骤：
+1. 创建一个 maven 项目，并在 pom 文件中添加需要的依赖
+2. 创建一个配置类，用来保存配置。添加 @ConfigurationProperties 注解，读取配置，并且需要增加一个前缀，该前缀下的都是我们的配置。类本身包含默认配置，当然外部项目可以通过修改配置文件来覆盖默认配置
+   ```java
+   @ConfigurationProperties(prefix = "test")
+   public class MyProperties {
+        // 自动获取配置文件中前缀为test的属性，把值传入对象参数
+        private String name = "hello";
+   
+        public String getName() {
+            return name;
+        }
+    
+        public void setName(String name) {
+            this.name = name;
+        }
+   } 
+   ```
+3. 创建一个自动装配类，完成 Bean 对象的实例化。添加 @Configuration 注解，表示是一个配置类，添加 @EnableConfigurationProperties 注解，使上述的配置类生效。我们在实例化 Bean 方法上添加 @ConditionalOnMissingBean 注解，表示只有当前 Bean 不存在的时候，才去实例化，防止重复实例化
+   ```java
+   @Configuration
+   @EnableConfigurationProperties(MyProperties.class)
+   public class TestAutoConfiguration {
+   
+       @Resource
+       private MyProperties properties;
+   
+       /**
+        * 在Spring上下文中创建一个对象
+        */
+       @Bean
+       @ConditionalOnMissingBean
+       public TestService init(){
+           TestService testService = new TestService();
+           String name = properties.getName();
+           testService.setName(name);
+           return testService;
+       }
+   }
+   ```
+4. 我们在 resources 文件夹下新建目录 META-INF，在目录中新建 spring.factories 文件，并添加自动装配类的路径到 spring.factories 文件中。告诉 Spring 框架自动装配类的路径，在启动的时候自动执行我们的自动装配类来完成 Bean 对象的实例化
+   ```
+   org.springframework.boot.autoconfigure.EnableAutoConfiguration=com.shgx.starter.TestAutoConfiguration
+   ```
+完成上述 4 步后，直接打包就得到了一个自定义的 Starter
+
+### mybatis-spring-boot-starter
+接下来开发我们自己的 ORM starter：mybatis-spring-boot-starter
+
+其实 starter 要做的事情就是上一章中将 ORM 集成到 Spring 所要做的事情，包括实例化对象 `SqlSessionFactory`，以及通过 `MapperScannerConfigurer` 类来扫描接口并添加接口类。我们这里复用上一章中集成的那些类，同时因为配置从 xml 改为 yaml，所以这些类的参数有一些修改。
+
+首先，我们定义一个配置类 `MybatisProperties`，用来保存配置信息。我们 starter 的配置如下，可以看到原先通过 xml 配置的现在都改为 yaml 配置，同时这些配置在引入的项目中可以被覆盖
+```yaml
+mybatis:
+  driver: com.mysql.jdbc.Driver
+  url: jdbc:mysql://127.0.0.1:3306/demo?useUnicode=true
+  username: root
+  password: 
+  mapper-locations: classpath*:mapper/*.xml
+  base-package: com.aric.middleware.mybatis.dao
+```
+
+`MybatisProperties` 属性如下，跟上述的配置类一一对应，我们添加 "mybatis" 作为配置类的前缀。同时需要注意配置中使用 "-" 连接的，在配置类中使用驼峰表示
+```java
+@ConfigurationProperties(prefix = "mybatis")
+public class MybatisProperties {
+    private String driver;
+    private String url;
+    private String username;
+    private String password;
+    private String mapperLocations;
+    private String basePackage;
+    
+    // ... getter and setter
+}
+```
+
+有了配置类后，接下来我们需要一个自动装配类，来完成那些 Bean 的实例化，关键代码如下。
+```java
+@Configuration
+@EnableConfigurationProperties(MybatisProperties.class)
+public class MybatisAutoConfiguration {
+   @Bean
+   @ConditionalOnMissingBean
+   public SqlSessionFactory sqlSessionFactory(MybatisProperties mybatisProperties, Connection connection) throws Exception {
+      return new SqlSessionFactoryBuilder().build(connection, mybatisProperties.getMapperLocations());
+   }
+
+   public static class AutoConfiguredMapperScannerRegistrar implements EnvironmentAware, ImportBeanDefinitionRegistrar {
+      private String basePackage;
+
+      @Override
+      public void registerBeanDefinitions(AnnotationMetadata importingClassMetadata, BeanDefinitionRegistry registry) {
+          // 注册 MapperScannerConfigurer 类
+         BeanDefinitionBuilder beanDefinitionBuilder = BeanDefinitionBuilder.genericBeanDefinition(MapperScannerConfigurer.class);
+         
+         beanDefinitionBuilder.addPropertyValue("basePackage", this.basePackage);
+         registry.registerBeanDefinition(MapperScannerConfigurer.class.getName(), beanDefinitionBuilder.getBeanDefinition());
+      }
+
+      @Override
+      public void setEnvironment(Environment environment) {
+          // 通过 EnvironmentAware 来获取配置属性
+         this.basePackage = environment.getProperty("mybatis.base-package");
+      }
+   }
+
+   @Configuration
+   @Import({AutoConfiguredMapperScannerRegistrar.class})
+   public static class MapperScannerRegistrarNotFoundConfiguration {
+       // 启动上述的静态类
+   }
+}
+```
+1. 我们添加 @Configuration 注解，确保当前类在 Bean 扫描路径中，添加 @EnableConfigurationProperties 注解，启用上述的配置类
+2. 在类中我们创建 `SqlSessionFactory` 的 Bean 对象，用来实例化 ORM 操作对象，这个其实和上一章的 `SqlSessionFactoryBean` 一样，只不过上一章中是添加到 xml 配置中的，这里我们在配置类中自动实例化了。 需要注意的是，这里我们需要修改下 `SqlSessionFactoryBuilder` 的参数，因为之前是从 xml 中读取的，但现在我们将配置外放，并且支持后续外部用户在项目中修改配置，因此就不适合当前的内部配置的形式了，所以我们将参数修改为直接接收 `Connection` 对象，这样内部类就不需要去读取那些配置了
+3. 我们添加内部静态类 `AutoConfiguredMapperScannerRegistrar`，用来注册 `MapperScannerConfigurer` 类，这个类就是用来自动扫描并添加代理类。同时需要注意的是，Bean 注册类运行比较早，这时候还没有配置类，所以我们通过 EnvironmentAware 来感知配置
+4. 最后我们添加一个类 `MapperScannerRegistrarNotFoundConfiguration` 来启动上述的静态类
+
+最后在 resources/META-INF/spring.factories 文件中添加自动配置入口即可
+```
+org.springframework.boot.autoconfigure.EnableAutoConfiguration=com.aric.middleware.mybatis.springbootstarter.MybatisAutoConfiguration
+```
+

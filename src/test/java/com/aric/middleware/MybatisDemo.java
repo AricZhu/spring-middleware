@@ -14,7 +14,8 @@ public class MybatisDemo {
     public static void main(String[] args) throws Exception {
         Reader reader = Resource.getResourceAsReader("mybatis-config-datasource.xml");
         SqlSessionFactoryBuilder sqlSessionFactoryBuilder = new SqlSessionFactoryBuilder();
-        SqlSessionFactory sqlSessionFactory = sqlSessionFactoryBuilder.build(reader);
+        // 参数修改
+        SqlSessionFactory sqlSessionFactory = sqlSessionFactoryBuilder.build(null, "");
         SqlSession sqlSession = sqlSessionFactory.openSession();
 
         UserQueryDTO userQueryDTO = new UserQueryDTO();

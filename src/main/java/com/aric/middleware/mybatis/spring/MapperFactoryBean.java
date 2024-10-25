@@ -1,7 +1,8 @@
-package com.aric.middleware.mybatisSpring;
+package com.aric.middleware.mybatis.spring;
 
 import com.aric.middleware.mybatis.SqlSession;
 import com.aric.middleware.mybatis.SqlSessionFactory;
+import jakarta.annotation.Resource;
 import org.springframework.beans.factory.FactoryBean;
 
 import java.lang.reflect.InvocationHandler;
@@ -10,11 +11,12 @@ import java.util.List;
 
 public class MapperFactoryBean<T> implements FactoryBean<T> {
     private Class<T> mapperInterface;
+
+    @Resource
     private SqlSessionFactory sqlSessionFactory;
 
-    public MapperFactoryBean(Class<T> mapperInterface, SqlSessionFactory sqlSessionFactory) {
+    public MapperFactoryBean(Class<T> mapperInterface) {
         this.mapperInterface = mapperInterface;
-        this.sqlSessionFactory = sqlSessionFactory;
     }
 
     @Override

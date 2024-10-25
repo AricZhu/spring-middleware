@@ -1,4 +1,4 @@
-package com.aric.middleware.mybatisSpring;
+package com.aric.middleware.mybatis.spring;
 
 import com.aric.middleware.mybatis.Resource;
 import com.aric.middleware.mybatis.SqlSessionFactory;
@@ -16,7 +16,8 @@ public class SqlSessionFactoryBean implements FactoryBean<SqlSessionFactory>, In
     @Override
     public void afterPropertiesSet() throws Exception {
         Reader reader = Resource.getResourceAsReader(resource);
-        this.sqlSessionFactory = new SqlSessionFactoryBuilder().build(reader);
+        // 参数修改
+        this.sqlSessionFactory = new SqlSessionFactoryBuilder().build(null, "");
     }
 
     @Override

@@ -4,12 +4,16 @@ import org.dom4j.Document;
 import org.dom4j.DocumentException;
 import org.dom4j.Element;
 import org.dom4j.io.SAXReader;
+import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
+import org.xml.sax.InputSource;
 
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.io.Reader;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -17,11 +21,21 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class SqlSessionFactoryBuilder {
-    public SqlSessionFactory build(Reader reader) throws Exception {
-        SAXReader saxReader = new SAXReader();
-        Document document = saxReader.read(reader);
-        Element rootElement = document.getRootElement();
-        Configuration configuration = parseConfiguration(rootElement);
+    public SqlSessionFactory build(Connection connection, String mapperLocation) throws Exception {
+        Configuration configuration = new Configuration();
+        configuration.setConnection(connection);
+
+        PathMatchingResourcePatternResolver pathResolver = new PathMatchingResourcePatternResolver();
+        org.springframework.core.io.Resource[] resources = pathResolver.getResources(mapperLocation);
+
+        List<Element> list = new ArrayList<>();
+
+        for (org.springframework.core.io.Resource resource : resources) {
+            Document read = new SAXReader().read(new InputStreamReader(resource.getInputStream()));
+            list.add(read.getRootElement());
+        }
+
+        configuration.setMapperElement(getMapperElement(list));
 
         return new DefaultSqlSessionFactory(configuration);
     }
@@ -56,20 +70,10 @@ public class SqlSessionFactoryBuilder {
         return map;
     }
 
-    public Map<String, XNode> getMapperElement(List<Element> elementList) throws Exception {
-        Element mappersElement = elementList.get(0);
-        List mapperList = mappersElement.content();
+    public Map<String, XNode> getMapperElement(List<Element> rootElementList) throws Exception {
         Map<String, XNode> mapperElement = new HashMap<>();
 
-        for (Object o : mapperList) {
-            Element mapper = (Element) o;
-            String resource = mapper.attributeValue("resource");
-
-            Reader reader = Resource.getResourceAsReader(resource);
-            SAXReader saxReader = new SAXReader();
-            Document document = saxReader.read(reader);
-
-            Element rootElement = document.getRootElement();
+        for (Element rootElement : rootElementList) {
             String namespace = rootElement.attributeValue("namespace");
 
             List selectNodeList = rootElement.selectNodes("select");
