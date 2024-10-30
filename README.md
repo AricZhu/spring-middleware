@@ -907,10 +907,151 @@ public class CustomBeanApplicationTest {
 }
 ```
 
-### netty 通信
-TODO
+### Netty 组件
+Netty 是一个高性能的异步事件驱动的网络通信框架。在详细介绍 Netty 的通信模型前，我们先介绍下 Java 中的传统的同步阻塞网络模型 BIO，如下，同步阻塞结构是每来一个请求，就会新开一个线程去处理，同时读写都是阻塞的，这种方式非常的低效，一旦请求多了，会占用大量的线程
+![bio](doc/images/bio.png)
+
+为了解决上述的问题，所以 Java 又提出了 I/O 复用模型，也就是通过一个 Selector 来同时处理多个 IO，这样就大大提高了效率，如下，一个线程中通过 Selector（多路复用器） 可以同时处理多个 IO 请求。当其中一个 IO 处于等待状态时，线程可以去处理其他 IO，这样就能大大的提高效率了
+![nio](doc/images/nio.png)
+
+同时，Netty 中的 IO 读取是基于 Buffer 的。传统的 IO 读取是基于字节/字符流的，这种方式不能随意改变读取位置。而 Netty 中引入了 Channel 和 Buffer 概念，数据的读取是从 Channel 中读入到 Buffer 中，或者从 Buffer 中将数据写入 Channel
+
+#### Netty 的线程模型
+Netty 主要基于主从 Reactors 多线程模型（如下图）做了一定的修改，其中主从 Reactor 多线程模型有多个 Reactor：MainReactor 和 SubReactor：
+![netty-thread-module](doc/images/netty-thread-module.png)
+
+* mainReactor：负责客户端的连接请求，并将请求转交给 subReactor
+* subReactor: 负责相应通道的 IO 读写请求
+* 非 IO 请求：直接写入任务队列，等待 worker threads 线程处理
+
+Netty 中的 IO 操作都是异步的，包括 bind，write，connect 等操作都会返回一个 ChannelFuture 对象，调用者并不会立刻拿到结果，通过Future-Listener机制可以得到最后的结果，如下：
+```
+serverBootstrap.bind(port).addListener(future -> {
+  if (future.isSuccess()) {
+      System.out.println(new Date() + ": 端口[" + port + "]绑定成功!");
+  } else {
+      System.err.println("端口[" + port + "]绑定失败!");
+  }
+});
+```
+
+#### Netty 工作架构
+
+![netty-worker](doc/images/netty-worker.png)
+
+Netty server 端包含 1 个 Boss NioEventLoopGroup 和 1 个 Worker NioEventLoopGroup。NioEventLoopGroup 相当于 1 个事件循环组，这个组里包含多个事件循环 NioEventLoop，每个 NioEventLoop 包含 1 个 selector 和 1 个事件循环线程。
+
+每个 Boss NioEventLoop 循环执行的任务包含 3 步：
+1. 轮询 accept 事件
+2. 处理 accept I/O 事件，与 Client 建立连接，生成 NioSocketChannel，并将 NioSocketChannel 注册到某个 Worker NioEventLoop 的 Selector 上
+3. 处理任务队列中的任务，runAllTasks。任务队列中的任务包括用户调用 eventloop.execute 或 schedule 执行的任务，或者其它线程提交到该 eventloop 的任务
+
+每个 Worker NioEventLoop 循环执行的任务包含 3 步：
+1. 轮询 read、write 事件
+2. 处理 I/O 事件，即 read、write 事件，在 NioSocketChannel 可读、可写事件发生时进行处理
+3. 处理任务队列中的任务，runAllTasks
+
+任务队列中的任务有 3 中典型的场景：
+1. 用户程序自定义的普通任务
+   ```
+   ctx.channel().eventLoop().execute(new Runnable() {
+      @Override
+      public void run() {
+         //...
+      }
+   });
+   ```
+2. 非当前 reactor 线程调用 channel 的各种方法 例如在推送系统的业务线程里面，根据用户的标识，找到对应的 channel 引用，然后调用 write 类方法向该用户推送消息，就会进入到这种场景。最终的 write 会提交到任务队列中后被异步消费
+3. 用户自定义定时任务
+   ```
+   ctx.channel().eventLoop().schedule(new Runnable() {
+   @Override
+   public void run() {
+   
+   }
+   }, 60, TimeUnit.SECONDS);
+   ```
+
+#### Netty 核心组件
+##### Bootstrap、ServerBootstrap
+Bootstrap 意思是引导，一个 Netty 应用通常由一个 Bootstrap 开始，主要作用是配置整个 Netty 程序，串联各个组件。Bootstrap 类是客户端程序的启动引导类，只需要一个 group，ServerBootstrap 是服务端启动引导类，需要两个 group
+
+一般 Bootstrap 创建启动步骤如下：
+
+![img.png](doc/images/netty-bootstrap-start.png)
+
+**group()**
+
+上面说到 ServerBootstrap 需要两个线程组：
+
+```
+EventLoopGroup bossGroup = new NioEventLoopGroup();
+EventLoopGroup workerGroup = new NioEventLoopGroup();
+```
+
+* bossGroup 用于监听客户端连接，专门负责与客户端创建连接，并把连接注册到 workerGroup 的 Selector 中
+* workerGroup 用于处理每一个连接发生的读写事件
+
+##### Future、ChannelFuture
+正如前面介绍，在 Netty 中所有的 IO 操作都是异步的，不能立刻得知消息是否被正确处理，但是可以过一会等它执行完成或者直接注册一个监听，具体的实现就是通过 Future 和 ChannelFutures，他们可以注册一个监听，当操作执行成功或失败时监听会自动触发注册的监听事件
+
+##### Channel
+Netty网络通信的组件，能够用于执行网络I/O操作。 Channel为用户提供：
+* 当前网络连接的通道的状态（例如是否打开？是否已连接？）
+* 网络连接的配置参数 （例如接收缓冲区大小）
+* 提供异步的网络I/O操作(如建立连接，读写，绑定端口)，异步调用意味着任何I / O调用都将立即返回，并且不保证在调用结束时所请求的I / O操作已完成。调用立即返回一个ChannelFuture实例，通过注册监听器到ChannelFuture上，可以I / O操作成功、失败或取消时回调通知调用方。
+* 支持关联I/O操作与对应的处理程序
+
+不同协议、不同的阻塞类型的连接都有不同的 Channel 类型与之对应，下面是一些常用的 Channel 类型
+* NioSocketChannel，异步的客户端 TCP Socket 连接
+* NioServerSocketChannel，异步的服务器端 TCP Socket 连接
+* NioDatagramChannel，异步的 UDP 连接
+* NioSctpChannel，异步的客户端 Sctp 连接
+* NioSctpServerChannel，异步的 Sctp 服务器端连接 这些通道涵盖了 UDP 和 TCP网络 IO以及文件 IO.
+
+##### Selector
+Netty基于Selector对象实现I/O多路复用，通过 Selector, 一个线程可以监听多个连接的Channel事件, 当向一个Selector中注册Channel 后，Selector 内部的机制就可以自动不断地查询(select) 这些注册的Channel是否有已就绪的I/O事件(例如可读, 可写, 网络连接完成等)，这样程序就可以很简单地使用一个线程高效地管理多个 Channel
+
+##### NioEventLoop
+NioEventLoop 中维护了一个线程和任务队列，支持异步提交执行任务，线程启动时会调用 NioEventLoop 的 run 方法，执行 I/O 任务和非 I/O 任务：
+* I/O 任务 即 selectionKey 中 ready 的事件，如 accept、connect、read、write 等，由 processSelectedKeys 方法触发。
+* 非 IO 任务 添加到 taskQueue 中的任务，如 register0、bind0 等任务，由 runAllTasks 方法触发
+
+两种任务的执行时间比由变量 ioRatio 控制，默认为 50，则表示允许非 IO 任务执行的时间与 IO 任务的执行时间相等
+
+##### NioEventLoopGroup
+主要管理 eventLoop 的生命周期，可以理解为一个线程池，内部维护了一组线程，每个线程(NioEventLoop)负责处理多个 Channel 上的事件，而一个 Channel 只对应于一个线程
+
+##### ChannelHandler
+ChannelHandler 是一个接口，处理 I/O 事件或拦截 I/O 操作，并将其转发到其 ChannelPipeline(业务处理链)中的下一个处理程序
+
+ChannelHandler 本身并没有提供很多方法，因为这个接口有许多的方法需要实现，方便使用期间，可以继承它的子类：
+* ChannelInboundHandler用于处理入站 I/O 事件
+* ChannelOutboundHandler用于处理出站 I/O 操作
+
+或者使用以下适配器类：
+* ChannelInboundHandlerAdapter 用于处理入站 I/O 事件
+* ChannelOutboundHandlerAdapter 用于处理出站 I/O 操作
+* ChannelDuplexHandler 用于处理入站和出站事件
+
+##### ChannelHandlerContext
+保存 Channel 相关的所有上下文信息，同时关联一个 ChannelHandler 对象
+
+##### ChannelPipline
+保存 ChannelHandler 的 List，用于处理或拦截 Channel 的入站事件和出站操作。 ChannelPipeline 实现了一种高级形式的拦截过滤器模式，使用户可以完全控制事件的处理方式，以及 Channel 中各个的 ChannelHandler 如何相互交互
+
+在 Netty 中每个 Channel 都有且仅有一个 ChannelPipeline 与之对应, 它们的组成关系如下:
+
+![img.png](doc/images/netty-channel.png)
+
+一个 Channel 包含了一个 ChannelPipeline, 而 ChannelPipeline 中又维护了一个由 ChannelHandlerContext 组成的双向链表, 并且每个 ChannelHandlerContext 中又关联着一个 ChannelHandler。入站事件和出站事件在一个双向链表中，入站事件会从链表head往后传递到最后一个入站的handler，出站事件会从链表tail往前传递到最前一个出站的handler，两种类型的handler互不干扰。
+
+#### Netty 通信的例子
+具体可以看 `MyNettyServer` 和 `MyNettyClient` 这两个类
 
 ## 架构设计
+TODO
+
 rpc 的调用过程包含了 3 方：rpc 中间件、接口注册方、接口消费方。其中 rpc 中间件提供 rpc 的全部功能，接口注册方通过中间件注册接口，接口消费方通过中间件消费接口，上面例子中的项目 B 就是接口注册方，项目 A 就是接口消费方
 
 rpc 调用的完整过程如下： 
