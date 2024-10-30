@@ -2,16 +2,16 @@
 本项目通过实现一些常见的中间件来加深对 Java 开发和 Spring 框架的理解
 
 
-## 白名单拦截
+# 白名单拦截
 白名单拦截是我们实际开发中经常遇到的业务场景：一个新功能上线后，我们通常并不会一开始就全量开放给所有用户，而是先给白名单内的用户进行开放使用，等这波用户线上验证完成后再全部开量。在这章我们实现白名单拦截的功能
 
-### 实现思路
+## 实现思路
 白名单拦截的基本实现思路是：自定义注解 + 切面 + 白名单配置
 * 自定义注解：用来标记那些需要被拦截的方法。注解中需要有两个属性，第一个表示需要判断的方法参数名，第二个则是被拦截后的返回值
 * 切面：用来统一处理拦截逻辑
 * 白名单配置：配置白名单列表
 
-### 实现过程
+## 实现过程
 1. 先定义一个自定义注解：`WhiteListAnnotation`，里面包含方法 key，用来表示需要跟白名单进行匹配的参数
 2. 然后在配置文件中添加白名单的配置，以 whitelist 作为前缀，并定义配置类：`WhiteListConfiguration`，我们使用注解 `@ConfigurationProperties(prefix = "whitelist")` 来获取配置中的值
 3. 通过切面类 `WhiteListProcessAop` 来处理所有的白名单注解，处理逻辑如下：
@@ -23,12 +23,12 @@
      * key 值不在白名单中，返回拦截的异常
 
 
-## 超时熔断
+# 超时熔断
 随着现在逐渐微服务化，一个功能可能上下游会依赖几十个服务，而其中如果某个服务挂了的话，那么这条链路可能就全部挂了，进而引起雪崩效应。所以为了能保证服务的高可用，我们需要有个超时熔断的机制，当某个服务不可用时能立马熔断，返回预定的错误
 
 本章实现的超时熔断功能是在 **Netflix** 公司的开源框架 `Hystrix` 的基础上进行的封装，通过注解 + AOP 的方式，使超时熔断更加易于使用。下面简单介绍下 `Hystrix` 的原理与使用
 
-### Hystrix 的原理与使用
+## Hystrix 的原理与使用
 
 maven 依赖包地址如下：
 ```xml
@@ -61,7 +61,7 @@ maven 依赖包地址如下：
 
 使用示例见：`HystrixDemo`
 
-### 实现
+## 实现
 我们最终的实现效果是通过注解的方式来方便的给当前方法添加超时熔断，可以指定超时时长，也可以使用默认的1s超时熔断。为此，我们分以下步骤实现：
 
 1. 定义超时熔断注解：`HystrixAnnotation`，包含一个参数 timeoutMs，主要用来标记哪些方法需要超时熔断
@@ -80,12 +80,12 @@ super(Setter.withGroupKey(HystrixCommandGroupKey.Factory.asKey("ExampleGroup"))
 ```
 
 
-## 服务限流
+# 服务限流
 服务在线上跑的时候，一般都是有性能上限的，比如某个服务 A 最大只能应对 100 QPS 的请求，但如果此时一瞬间有大流量进来，比如有 2000 QPS 的请求进来，那么服务一下子就被打崩溃了
 
 对于上述这种问题，我们一般采用限流的方式来解决，所以本章我们就来实现限流
 
-### 限流算法
+## 限流算法
 
 常见的限流算法有以下三种：
 1. 计数器法
@@ -103,7 +103,7 @@ super(Setter.withGroupKey(HystrixCommandGroupKey.Factory.asKey("ExampleGroup"))
 
 ![令牌桶](./doc/images/token-bucket.png)
 
-### 限流实现
+## 限流实现
 本章实现的限流功能是基于 guava 的 `RateLimiter`限流工具的封装，它本身使用令牌桶算法，依赖包地址如下：
 
 ```xml
@@ -154,10 +154,10 @@ public class RateLimiterDemo {
     - 维护一个 map，"类名.方法名" 作为 key，限流对象作为 value，限流参数由注解提供，最终实现针对不同方法具有不同的限流值
 3. 定义切面类 `RateLimiterProcessAop`，用来拦截所有有限流注解的方法，并传入上述的限流封装类中
 
-## 自定义拦截方法
+# 自定义拦截方法
 本章我们实现自定义拦截方法，通过注解+切面的形式给用户提供更加方便的自定义逻辑的实现。
 
-### 实现
+## 实现
 1. 添加注解 `MethodExtAnnotation`，用来表示自定义方法的信息，其中参数 method 表示自定义的方法名称
 2. 添加切面类 `MethodExtProcessAop`，处理自定义逻辑：
     * 首先从注解中获取到自定义方法的名称
@@ -189,10 +189,10 @@ class MethodExtDemo {
 
 ```
 
-## ORM 框架实现
+# ORM 框架实现
 数据库操作是我们实际业务中经常使用的，我们都用过 JDBC 的方式进行数据库操作，随着后面的学习，我们接触到了 iBatis、MyBatis，Hibernate 等优秀的数据库操作组件，这些都是 ORM 的具体实现。本章我们基于底层的 JDBC 自己封装一套 ORM 框架
 
-### JDBC 介绍
+## JDBC 介绍
 在具体开发前，先来介绍下 JDBC 组件。JDBC 组件是数据库的驱动，提供了对数据库的 CRUD 操作。下面以一个示例来具体说明 JDBC 的使用：
 
 ```java
@@ -307,7 +307,7 @@ public class JdbcDemo {
 * getDouble(int columnIndex)：根据列索引获取双精度浮点数。
 * getDate(String columnLabel)：根据列名获取日期数据。
 
-### ORM 整体设计
+## ORM 整体设计
 
 整个 ORM 框架需要包含以下几部分：
 * xml 配置文件的解析，节点信息的保存
@@ -320,7 +320,7 @@ public class JdbcDemo {
 * `SqlSessionFactory` 和 `DefaultSqlSessionFactory`：接口和实现类，用来实现数据库的连接操作
 * `SqlSessionFactoryBuilder`：实现读取配置，解析并构造需要的类
 
-#### 类整体设计
+### 类整体设计
 
 ```mermaid
 classDiagram
@@ -390,7 +390,7 @@ classDiagram
    Configuration --> XNode: 关联
 ```
 
-#### 关键步骤的实现
+### 关键步骤的实现
 **xml 配置文件读取**
 
 我们通过 `Resource` 类来实现资源的读取，具体是通过 `ClassLoader` 来加载字节流 `InputStream`，然后再转换为方便读取的字符流 `InputStreamReader`，如下:
@@ -514,7 +514,7 @@ public class Demo {
    method.invoke(obj, value);
    ```
 
-## ORM 框架与 Spring 的结合
+# ORM 框架与 Spring 的结合
 在上一章我们实现了一个 ORM 框架，能进行基本的 CRUD 操作以及完成参数和结果的映射。这一章我们需要将它集成到 Spring 框架中便于使用。同时我们知道在 mybatis 框架提供了一种快捷方便的方式操作数据库，即只提供接口定义，不需要具体的实现类就可以实现数据库的操作，示例如下：
 
 ```java
@@ -540,7 +540,7 @@ public void test() {
 
 下面我们来实现 mybatis 的这种功能。让我们的 ORM 框架更像 mybatis
 
-### 整体设计
+## 整体设计
 上文说到了接口操作的核心是代理类，所以我们首先需要一个配置扫描类，用来扫描所有需要代理的接口，并给这些接口添加代理类，其次需要一个代理类，用来代理接口的操作，最后我们还需要一个 ORM 操作类，在代理类中我们借助 ORM 操作类来实际操作 ORM 框架
 
 综上，mybatis-spring 框架的核心类有如下三个：
@@ -553,14 +553,14 @@ public void test() {
 
 ![mybatis-spring架构图](doc/images/mybatis-spring.png)
 
-### 核心实现
-#### `SqlSessionFactoryBean` 类的实现
+## 核心实现
+### `SqlSessionFactoryBean` 类的实现
 `SqlSessionFactoryBean` 类是完成 `SqlSessionFactory` 类的初始化，并借此用来操作 ORM 的。我们通过实现 Spring 中的 FactoryBean 和 InitializingBean 这两个接口来完成该类的实例化
 * FactoryBean：用来创建 Spring 容器中的实例对象。我们在这个接口中完成了当前实例对象指向 `SqlSessionFactory` 对象
 * InitializingBean：在 Bean 对象配置完属性后的钩子操作。我们在这个接口中完成了 `SqlSessionFactory` 的实例化
 
 
-#### `MapperFactoryBean` 类的实现
+### `MapperFactoryBean` 类的实现
 `MapperFactoryBean` 类是接口代理类，主要是代理 mybatis 的接口，并实现 ORM 操作。这里我们还是通过实现 FactoryBean 接口来完成类的实例化，并在其中完成代理类的创建。
 创建所需的被代理的接口以及 ORM 操作对象会在构造函数中注入，这个是由扫描类帮忙注入的。代理的实现逻辑也比较简单：
 1. 根据当前被代理的方法，获取到方法名，和接口全名进行拼接后，就得到了完整的操作名，即上一章的 "namespace.id"
@@ -606,7 +606,7 @@ public T getObject() throws Exception {
 }
 ```
 
-#### `MapperScannerConfigurer` 类的实现
+### `MapperScannerConfigurer` 类的实现
 `MapperScannerConfigurer` 是配置扫描类，用来解析配置，扫描出所有需要代理的 DAO 接口，修改 Bean 注册并添加上述的代理类，最终注册到 Spring 容器中。
 注意：在给接口添加代理的时候，还需要将当前接口，以及 ORM 操作对象 `SqlSessionFactory` 注入到代理类中的构造函数的参数中
 
@@ -658,17 +658,17 @@ public class CustomBeanDefinitionRegistryPostProcessor implements BeanDefinition
 4. 设置 BeanDefinition 的属性，包括设置构造参数等，供后续代理类使用，同时设置 beanClass 为我们的代理类 MapperFactoryBean
 5. 最后我们注册 BeanDefinition
 
-## 开发 ORM starter
+# 开发 ORM starter
 上面两章中我们开发了 ORM，并且将 ORM 集合到 Spring 框架中，但现在使用上还是比较繁琐，不仅要添加配置文件，还需要实例化 Bean 对象，初始化 `SqlSessionFactory` 等，所以在本章我们开发一个 Spring boot starter 插件，将上述的步骤自动化装配，这样后面使用的时候，就直接在 pom 中引入我们的 starter 依赖即可开箱使用
 
 在实际开发本章的 starter 前，先来介绍下 starter 以及它的开发流程。
 
-### 关于 Starter
+## 关于 Starter
 在传统的 Spring 框架使用中，我们要引入一个中间件，比如 Redis、Mybatis，需要做一系列的配置操作，以及 Bean 对象初始化等操作，引入的中间件一多，就成了配置地狱。所以为了解决这种配置繁琐的问题，官方推出了 Spring Boot，它秉承着约定大于配置的理念，通过一个个的 starter 让我们实现开箱即用，比如我们只需要在 pom 依赖中添加 spring-boot-starter-web，我们就可以使用 Spring MVC 的功能。
 
 而 starter 其实就是内部封装了所需的所有依赖，默认的配置，并帮我们自动初始化 Bean 对象，然后通过 spring.factories 文件来告诉 Spring 框架自动装配的路径，在 Spring 框架启动的时候运行我们的 starter 完成自动装配。一句话就是 starter 帮我们做了所有的脏活累活，所以我们才能优雅的使用
 
-### 开发一个 Starter 示例
+## 开发一个 Starter 示例
 开发一个 Starter 其实很简单，主要有以下 4 个步骤：
 1. 创建一个 maven 项目，并在 pom 文件中添加需要的依赖
 2. 创建一个配置类，用来保存配置。添加 @ConfigurationProperties 注解，读取配置，并且需要增加一个前缀，该前缀下的都是我们的配置。类本身包含默认配置，当然外部项目可以通过修改配置文件来覆盖默认配置
@@ -715,7 +715,7 @@ public class CustomBeanDefinitionRegistryPostProcessor implements BeanDefinition
    ```
 完成上述 4 步后，直接打包就得到了一个自定义的 Starter
 
-### mybatis-spring-boot-starter
+## mybatis-spring-boot-starter
 接下来开发我们自己的 ORM starter：mybatis-spring-boot-starter
 
 其实 starter 要做的事情就是上一章中将 ORM 集成到 Spring 所要做的事情，包括实例化对象 `SqlSessionFactory`，以及通过 `MapperScannerConfigurer` 类来扫描接口并添加接口类。我们这里复用上一章中集成的那些类，同时因为配置从 xml 改为 yaml，所以这些类的参数有一些修改。
@@ -793,3 +793,158 @@ public class MybatisAutoConfiguration {
 org.springframework.boot.autoconfigure.EnableAutoConfiguration=com.aric.middleware.mybatis.springbootstarter.MybatisAutoConfiguration
 ```
 
+# RPC 框架通信模型实现
+rpc 通信被广泛的应用在不同服务之间相互调用，它可以像调用本地方法一样去调用远程服务，使用非常的便捷。如下面示例所示，我们直接在项目 A 中去调用项目 B 的服务时，直接引入对象并调用对象的方法，看起来像是直接在本地调用一般，但其实内部还是通过网络请求调用了远程的 B 服务，只不过 rpc 框架帮我们封装了底层
+```java
+import jakarta.annotation.Resource;
+
+// 工程 A
+public class ProjectA {
+   @Resource
+   private ServiceB serviceB;
+   
+   public void hello() {
+       serviceB.hello();
+   }
+}
+
+// 工程 B 中提供了 ServiceB 的服务
+public class ServiceBImpl implements ServiceB {
+    @Override
+    public void hello() {
+       System.out.println("hello world!");
+    }
+}
+```
+**注意**: 工程 B 是部署在其他服务器上的，有他自己的数据库等资源，所以要调用 B 的服务，你只能通过网络请求比如 http 的方式去调用，这个和工程 A 中直接引入工程 B 的包是不一样的，前者是独立的服务，有独立的数据库等资源，后者只是当成工具一样引入。
+
+## 前置知识
+本次 rpc 中间件的设计需要用到自定义标签的处理技术以及 netty 通信，下面先介绍这两种技术：
+
+### 自定义标签处理
+我们需要通过自定义的标签来实现接口的注册和获取，在 spring 中实现 xml 的自定义标签的解析有以下 4 步：
+
+1. 首先我们需要创建描述我们自定义标签属性的文件，也就是 custom.xsd 文件。如下所示：xmlns 指定了自定义命名空间。targetNamespace 设定了目标命名空间，这意味着任何符合这个 XSD 的 XML 文档都会被认为是在该命名空间内。elementFormDefault="qualified" 指定在目标命名空间中的元素必须在 XML 文档中被限定，通常使用命名空间前缀。
+   创建完后需要注册下，在 META-INF/spring.schemas 中添加以下内容：http\://www.example.org/schema/custom/custom.xsd=custom.xsd
+上述添加的内容表示告诉 Spring 框架，遇到 xml 中的 "http\://www.example.org/schema/custom/custom.xsd" 资源验证时，直接使用 "custom.xsd"，也就是我们刚创建的 xsd 文件
+   ```xsd
+   <?xml version="1.0" encoding="UTF-8"?>
+   <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+   xmlns="http://www.example.org/schema/custom"
+   targetNamespace="http://www.example.org/schema/custom"
+   elementFormDefault="qualified">
+   
+       <xs:element name="custom-tag">
+           <xs:complexType>
+               <xs:attribute name="id" type="xs:string" />
+               <xs:attribute name="name" type="xs:string" />
+               <xs:attribute name="age" type="xs:string" />
+           </xs:complexType>
+       </xs:element>
+   </xs:schema>
+   ```
+2. 有了上述的 xsd 配置文件，并注册了 xsd 的解析路径后，接下来我们就可以创建包含自定义标签的 xml 配置文件：spring-config.xml。下面的配置文件中的 xmlns:custom 就表示我们的自定义标签头为 custom, 命名空间是 "http://www.example.org/schema/custom", 然后 xsi:schemaLocation 指定了命名空间资源验证路径，可以看到我们的命名空间 "http://www.example.org/schema/custom" 对应的验证路径是 "http://www.example.org/schema/custom/custom.xsd", 而通过上述 xsd 注册知道，该验证路径正好对应我们创建的 xsd 文件，所以最终就是通过我们创建的 xsd 文件来验证 xml 配置中的 custom-tag
+   ```xml
+   <beans xmlns="http://www.springframework.org/schema/beans"
+   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+   xmlns:custom="http://www.example.org/schema/custom"
+   xsi:schemaLocation="
+   http://www.springframework.org/schema/beans
+   http://www.springframework.org/schema/beans/spring-beans.xsd
+   http://www.example.org/schema/custom
+   http://www.example.org/schema/custom/custom.xsd">
+   
+       <custom:custom-tag id="customBean1" name="aric" age="18" />
+       <custom:custom-tag id="customBean2" name="ke" age="28" />
+   </beans>
+   ```
+3. 现在我们可以添加自定义命名空间处理类。并注册命名空间处理类：在 META-INF/spring.handlers 文件中添加内容：http\://www.example.org/schema/custom=com.example.CustomNamespaceHandler 。这个就表示上述我们自定义标签的命名空间 "http://www.example.org/schema/custom" 由下面的类来处理。
+   ```java
+   public class CustomNamespaceHandler extends NamespaceHandlerSupport {
+        @Override
+        public void init() {
+           registerBeanDefinitionParser("custom-tag", new CustomBeanDefinitionParser(CustomBean.class));
+        }
+   } 
+   ```
+4. 创建自定义的 BeanDefinitionParser, 这是负责解析自定义标签的核心类
+   ```java
+   public class CustomBeanDefinitionParser implements BeanDefinitionParser {
+    private Class<?> clazz;
+
+    public CustomBeanDefinitionParser(Class<?> clazz) {
+        this.clazz = clazz;
+    }
+
+    @Override
+    public BeanDefinition parse(Element element, ParserContext parserContext) {
+        BeanDefinitionBuilder builder = BeanDefinitionBuilder.genericBeanDefinition(clazz);
+        String id = element.getAttribute("id");
+        String name = element.getAttribute("name");
+        String age = element.getAttribute("age");
+
+        builder.addPropertyValue("name", name);
+        builder.addPropertyValue("age", Integer.valueOf(age));
+
+        parserContext.getRegistry().registerBeanDefinition(id, builder.getBeanDefinition());
+        return builder.getBeanDefinition();
+    }
+   }
+   ```
+
+以上 4 步就完成了自定义标签，包括 xsd 文件描述，xsd 注册，命名空间处理类、命名空间处理注册、标签解析类。接下来我们就可以按如下方式获取到我们自定义的 Bean：
+```java
+public class CustomBeanApplicationTest {
+    @Test
+    public void test_customBean() {
+        ClassPathXmlApplicationContext applicationContext = new ClassPathXmlApplicationContext("spring-config.xml");
+        CustomBean customBean = applicationContext.getBean("customBean1", CustomBean.class);
+        CustomBean customBean2 = applicationContext.getBean("customBean2", CustomBean.class);
+
+        System.out.println(JSON.toJSONString(customBean));
+        System.out.println(JSON.toJSONString(customBean2));
+    }
+}
+```
+
+### netty 通信
+TODO
+
+## 架构设计
+rpc 的调用过程包含了 3 方：rpc 中间件、接口注册方、接口消费方。其中 rpc 中间件提供 rpc 的全部功能，接口注册方通过中间件注册接口，接口消费方通过中间件消费接口，上面例子中的项目 B 就是接口注册方，项目 A 就是接口消费方
+
+rpc 调用的完整过程如下： 
+首先接口注册方会将接口添加到注册中心（redis 实现），然后消费方调用接口时，实际通过 ConsumerBean 作为代理对象，该代理对象会先从注册中心获取实际调用的接口信息，然后通过 netty 网络通信传输到对应的接口提供方，接口提供方从 netty 中获取到信息，根据信息实际调用接口，并将接口返回结果通过 netty 返回给消费方，消费方再通过 ConsumerBean 对象返回最终的调用结果。这样就完成了一次 rpc 调用
+
+![rpc调用流程](doc/images/rpc-process.png)
+
+由上述的调用过程可以知道，rpc 中间件至少包含了以下的模块：
+* ProviderBean：实现接口注册的 Bean
+* ConsumerBean：代理对象，实现接口消费的 Bean
+* Redis 注册中心：保存接口注册
+* Netty 通信：网络通信层
+* 编码/解码模块：网络传输时的编解码
+* 注册中心配置模块：提供 redis 配置
+
+### 模块设计
+整个中间件需要包含以下几个部分：
+1. 配置模块
+   * 注册中心的配置：地址、端口号
+   * 接口注册配置
+   * 接口消费配置
+2. 启动模块
+   * 启动注册中心
+   * 启动 netty 通信
+3. 注册中心
+   * redis 注册中心
+   * 添加/获取接口注册
+4. netty 通信
+   * 消息通信
+   * 编码/解码
+   * 消息处理
+
+## 功能设计
+TODO
+
+## 类设计
+TODO
