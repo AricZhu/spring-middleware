@@ -30,15 +30,6 @@
 
 ## Hystrix 的原理与使用
 
-maven 依赖包地址如下：
-```xml
-<dependency>
-    <groupId>com.netflix.hystrix</groupId>
-    <artifactId>hystrix-core</artifactId>
-    <version>1.5.18</version>
-</dependency>
-```
-
 `Hystrix` 工作时有以下三个状态：
 * 关闭：所有请求直接通过
 * 全开：当服务错误达到阈值时，进入全开状态，产生熔断，此时所有请求均降级返回
@@ -114,37 +105,7 @@ super(Setter.withGroupKey(HystrixCommandGroupKey.Factory.asKey("ExampleGroup"))
 </dependency>
 ```
 
-`RateLimiter` 的使用很简单，只需要通过 create 方法创建一个实例对象，然后调用 acquire（没有令牌时原地阻塞） 或者 tryAcquire（没有令牌直接返回 false） 方法获取令牌即可，示例如下：
-
-```java
-package com.aric.middleware;
-
-import com.google.common.util.concurrent.RateLimiter;
-
-public class RateLimiterDemo {
-    //每秒只发出 1 个令牌
-    private final RateLimiter rateLimiter = RateLimiter.create(1);
-
-    public void testLimit() {
-        int count = 0;
-        for (;;) {
-            if (rateLimiter.tryAcquire()) {
-                System.out.println(System.currentTimeMillis() / 1000);
-                count++;
-                if (count > 10) {
-                    break;
-                }
-            }
-        }
-    }
-
-    public static void main(String[] args) {
-        RateLimiterDemo rateLimiterDemo = new RateLimiterDemo();
-        rateLimiterDemo.testLimit();
-    }
-}
-
-```
+`RateLimiter` 的使用很简单，只需要通过 create 方法创建一个实例对象，然后调用 acquire（没有令牌时原地阻塞） 或者 tryAcquire（没有令牌直接返回 false） 方法获取令牌即可，示例如下：`com.aric.middleware.RateLimiterDemo`
 
 基于上述的 `RateLimiter`，我们现在可以封装自己的限流中间件。具体实现步骤如下：
 
@@ -193,97 +154,7 @@ class MethodExtDemo {
 数据库操作是我们实际业务中经常使用的，我们都用过 JDBC 的方式进行数据库操作，随着后面的学习，我们接触到了 iBatis、MyBatis，Hibernate 等优秀的数据库操作组件，这些都是 ORM 的具体实现。本章我们基于底层的 JDBC 自己封装一套 ORM 框架
 
 ## JDBC 介绍
-在具体开发前，先来介绍下 JDBC 组件。JDBC 组件是数据库的驱动，提供了对数据库的 CRUD 操作。下面以一个示例来具体说明 JDBC 的使用：
-
-```java
-package com.aric.middleware;
-
-import java.sql.Connection;
-import java.sql.DriverManager;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-
-public class JdbcDemo {
-    private static final String URL = "jdbc:mysql://localhost:3306/demo";
-    private static final String USER = "root";
-    private static final String PASSWORD = "";
-
-    public void insertData(String name) {
-        String sql = "insert into users(name) values(?)";
-        try(
-                Connection conn = DriverManager.getConnection(URL, USER, PASSWORD);
-                PreparedStatement preparedStatement = conn.prepareStatement(sql);
-        ) {
-            preparedStatement.setString(1, name);
-            preparedStatement.executeUpdate();
-            System.out.println("Inserted: " + name);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
-    public void fetchData() {
-        String sql = "select * from users;";
-
-        try (
-                Connection conn = DriverManager.getConnection(URL, USER, PASSWORD);
-                PreparedStatement preparedStatement = conn.prepareStatement(sql);
-        ) {
-            ResultSet resultSet = preparedStatement.executeQuery();
-            System.out.println("fetch data: id  name");
-            while (resultSet.next()) {
-                int id = resultSet.getInt("id");
-                String name = resultSet.getString("name");
-                System.out.println(id + ", " + name);
-            }
-
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
-    public void updateData(int id, String name) {
-        String sql = "update users set name = ? where id = ?";
-
-        try (
-                Connection conn = DriverManager.getConnection(URL, USER, PASSWORD);
-                PreparedStatement preparedStatement = conn.prepareStatement(sql);
-        ) {
-            preparedStatement.setString(1, name);
-            preparedStatement.setInt(2, id);
-
-            preparedStatement.executeUpdate();
-            System.out.println("update for id = " + id + ", name = " + name);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
-    public void deleteData(int id) {
-        String sql = "delete from users where id = ?";
-        try (
-                Connection conn = DriverManager.getConnection(URL, USER, PASSWORD);
-                PreparedStatement preparedStatement = conn.prepareStatement(sql);
-        ) {
-            preparedStatement.setInt(1, id);
-            int i = preparedStatement.executeUpdate();
-            System.out.println("delete id: " + id + ", result: " + i);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
-    public static void main(String[] args) {
-        JdbcDemo jdbcDemo = new JdbcDemo();
-        jdbcDemo.insertData("aric");
-        jdbcDemo.insertData("xiaoming");
-        jdbcDemo.fetchData();
-        jdbcDemo.updateData(1, "xiaoli");
-        jdbcDemo.deleteData(2);
-    }
-}
-
-```
+在具体开发前，先来介绍下 JDBC 组件。JDBC 组件是数据库的驱动，提供了对数据库的 CRUD 操作。下面以一个示例来具体说明 JDBC 的使用：`com.aric.middleware.JdbcDemo`
 
 通过上述的 CRUD 操作，我们知道使用 JDBC 对数据库进行操作主要分以下 4 步：
 1. 连接到数据库：使用 "DriverManager.getConnection" 进行连接，并获取到连接对象 `Connection`
@@ -732,19 +603,6 @@ mybatis:
 ```
 
 `MybatisProperties` 属性如下，跟上述的配置类一一对应，我们添加 "mybatis" 作为配置类的前缀。同时需要注意配置中使用 "-" 连接的，在配置类中使用驼峰表示
-```java
-@ConfigurationProperties(prefix = "mybatis")
-public class MybatisProperties {
-    private String driver;
-    private String url;
-    private String username;
-    private String password;
-    private String mapperLocations;
-    private String basePackage;
-    
-    // ... getter and setter
-}
-```
 
 有了配置类后，接下来我们需要一个自动装配类，来完成那些 Bean 的实例化，关键代码如下。
 ```java
@@ -859,53 +717,11 @@ public class ServiceBImpl implements ServiceB {
    </beans>
    ```
 3. 现在我们可以添加自定义命名空间处理类。并注册命名空间处理类：在 META-INF/spring.handlers 文件中添加内容：http\://www.example.org/schema/custom=com.example.CustomNamespaceHandler 。这个就表示上述我们自定义标签的命名空间 "http://www.example.org/schema/custom" 由下面的类来处理。
-   ```java
-   public class CustomNamespaceHandler extends NamespaceHandlerSupport {
-        @Override
-        public void init() {
-           registerBeanDefinitionParser("custom-tag", new CustomBeanDefinitionParser(CustomBean.class));
-        }
-   } 
-   ```
-4. 创建自定义的 BeanDefinitionParser, 这是负责解析自定义标签的核心类
-   ```java
-   public class CustomBeanDefinitionParser implements BeanDefinitionParser {
-    private Class<?> clazz;
+详情看 `com.aric.middleware.CustomNamespaceHandler`
 
-    public CustomBeanDefinitionParser(Class<?> clazz) {
-        this.clazz = clazz;
-    }
+4. 创建自定义的 BeanDefinitionParser, 这是负责解析自定义标签的核心类: `com.aric.middleware.CustomBeanDefinitionParser`
 
-    @Override
-    public BeanDefinition parse(Element element, ParserContext parserContext) {
-        BeanDefinitionBuilder builder = BeanDefinitionBuilder.genericBeanDefinition(clazz);
-        String id = element.getAttribute("id");
-        String name = element.getAttribute("name");
-        String age = element.getAttribute("age");
-
-        builder.addPropertyValue("name", name);
-        builder.addPropertyValue("age", Integer.valueOf(age));
-
-        parserContext.getRegistry().registerBeanDefinition(id, builder.getBeanDefinition());
-        return builder.getBeanDefinition();
-    }
-   }
-   ```
-
-以上 4 步就完成了自定义标签，包括 xsd 文件描述，xsd 注册，命名空间处理类、命名空间处理注册、标签解析类。接下来我们就可以按如下方式获取到我们自定义的 Bean：
-```java
-public class CustomBeanApplicationTest {
-    @Test
-    public void test_customBean() {
-        ClassPathXmlApplicationContext applicationContext = new ClassPathXmlApplicationContext("spring-config.xml");
-        CustomBean customBean = applicationContext.getBean("customBean1", CustomBean.class);
-        CustomBean customBean2 = applicationContext.getBean("customBean2", CustomBean.class);
-
-        System.out.println(JSON.toJSONString(customBean));
-        System.out.println(JSON.toJSONString(customBean2));
-    }
-}
-```
+以上 4 步就完成了自定义标签，包括 xsd 文件描述，xsd 注册，命名空间处理类、命名空间处理注册、标签解析类。接下来我们就可以按如下方式获取到我们自定义的 Bean：详情请看 `com.aric.middleware.CustomBeanApplicationTest`
 
 ### Netty 组件
 Netty 是一个高性能的异步事件驱动的网络通信框架。在详细介绍 Netty 的通信模型前，我们先介绍下 Java 中的传统的同步阻塞网络模型 BIO，如下，同步阻塞结构是每来一个请求，就会新开一个线程去处理，同时读写都是阻塞的，这种方式非常的低效，一旦请求多了，会占用大量的线程
@@ -1048,6 +864,10 @@ ChannelHandler 本身并没有提供很多方法，因为这个接口有许多�
 
 #### Netty 通信的例子
 具体可以看 `MyNettyServer` 和 `MyNettyClient` 这两个类
+
+#### 参考
+* https://juejin.cn/post/6924528182313893896
+* https://developer.aliyun.com/article/769587
 
 ## 架构设计
 TODO
