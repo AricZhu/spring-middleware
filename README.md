@@ -870,41 +870,64 @@ ChannelHandler 本身并没有提供很多方法，因为这个接口有许多�
 * https://developer.aliyun.com/article/769587
 
 ## 架构设计
-TODO
+rpc 调用的完整流程如下：
+
+![img.png](doc/images/rpc-work-process.png)
 
 rpc 的调用过程包含了 3 方：rpc 中间件、接口注册方、接口消费方。其中 rpc 中间件提供 rpc 的全部功能，接口注册方通过中间件注册接口，接口消费方通过中间件消费接口，上面例子中的项目 B 就是接口注册方，项目 A 就是接口消费方
 
-rpc 调用的完整过程如下： 
-首先接口注册方会将接口添加到注册中心（redis 实现），然后消费方调用接口时，实际通过 ConsumerBean 作为代理对象，该代理对象会先从注册中心获取实际调用的接口信息，然后通过 netty 网络通信传输到对应的接口提供方，接口提供方从 netty 中获取到信息，根据信息实际调用接口，并将接口返回结果通过 netty 返回给消费方，消费方再通过 ConsumerBean 对象返回最终的调用结果。这样就完成了一次 rpc 调用
-
-![rpc调用流程](doc/images/rpc-process.png)
-
 由上述的调用过程可以知道，rpc 中间件至少包含了以下的模块：
-* ProviderBean：实现接口注册的 Bean
-* ConsumerBean：代理对象，实现接口消费的 Bean
-* Redis 注册中心：保存接口注册
-* Netty 通信：网络通信层
-* 编码/解码模块：网络传输时的编解码
-* 注册中心配置模块：提供 redis 配置
+* 注册中心：保存我们的接口信息
+* 配置模块：注册中心的配置、接口配置
+* 网络通信：编码/解码、网络通信
+* 代理模块：消费方通过代理模块实现 API 调用的全过程，包括调用网络通信等
 
-### 模块设计
-整个中间件需要包含以下几个部分：
-1. 配置模块
-   * 注册中心的配置：地址、端口号
-   * 接口注册配置
-   * 接口消费配置
-2. 启动模块
-   * 启动注册中心
-   * 启动 netty 通信
-3. 注册中心
-   * redis 注册中心
-   * 添加/获取接口注册
-4. netty 通信
-   * 消息通信
-   * 编码/解码
-   * 消息处理
+![img.png](doc/images/rpc-modules.png)
 
-## 功能设计
+## 模块设计
+### 配置模块
+配置模块包括自定义标签、接口注册的配置和接口消费的配置。关于自定义标签，这里不在赘述
+
+接口注册配置: `ProviderConfig`:
+* nozzle: 作为接口的唯一标识
+* host: 远程服务器地址
+* port: 远程服务器端号口
+
+客户端需要根据接口中的远程服务器地址去请求
+
+接口消费配置: `ConsumerConfig`:
+* nozzle：需要消费的接口标识
+
+### 注册中心设计
+我们使用 redis 作为注册中心，提供接口的存取
+
+### 网络通信模块设计
+我们使用 Netty 作为底层网络通信。rpc 中间件的核心就是通过网络将方法调用传输到提供方法的目标服务器上，然后在目标服务器上调用完成后，再将结果传输回来。这个过程包括一下几个部分：
+1. 客户端模块 `ClientSocket`：作为方法调用的发起方，向实际注册的服务端发送方法调用的请求
+2. 服务端模块 `ServerSocket`：实现方法的调用，并将结果返回给客户端
+3. 请求/响应对象：`Response`、`Request`：请求对象的协议
+4. 请求对象的编解码模块 `Encoder`、`Decoder`：网络传输过程中的编码、解码
+
+![img.png](doc/images/rpc-network.png)
+
+编码和解码涉及到序列化，我们这里使用 protostuff 工具来序列化我们的对象，详情查看 `SerializeUtil.java` 和测试类 `SerializeUtilDemo.java`
+
+客户端和服务端模块：客户端和服务端模块的初始化可以参考上述 Netty 的例子，这里需要注意的是，客户端是发送 `Request`，接收服务端返回的 `Response`, 而服务端是接收客户端的 `Request`，发送 `Response`，所以这两者的编码解码的对象不一致，如下：
+```
+// 客户端
+new Encoder(Request)
+new Decoder(Response)
+
+// 服务端
+new Encoder(Response)
+new Decoder(Request)
+```
+同时在客户端的实现中，由于发送数据和等到服务端接收响应是一个异步操作，所以我们自己封装了类 `WriteFuture` 来实现同步等待服务端响应的能力。这个类内部是通过 "CountDownLatch" 锁来实现同步等待的，同时还增加了超时处理。
+由于客户端数据的接收并不能直接通过 ChannelFuture 对象，而是需要在 channelRead 函数中实现的，因此我们通过 `WriteFutureMap` 来进行 Response 数据的保存
+
+请求/响应对象设计：请求对象 `Request` 中需要包含 `ProviderConfig`，响应对象中需要包含执行结果
+
+### 代理对象设计
 TODO
 
 ## 类设计
