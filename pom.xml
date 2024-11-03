@@ -11,7 +11,8 @@
 	<groupId>com.aric</groupId>
 	<artifactId>middleware</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
-	<name>middleware</name>
+    <packaging>pom</packaging>
+    <name>middleware</name>
 	<description>Middleware for spring</description>
 	<url/>
 	<licenses>
@@ -20,6 +21,12 @@
 	<developers>
 		<developer/>
 	</developers>
+	<modules>
+		<module>rpc-provider</module>
+		<module>middle</module>
+		<module>rpc</module>
+		<module>rpc-consumer</module>
+	</modules>
 	<scm>
 		<connection/>
 		<developerConnection/>

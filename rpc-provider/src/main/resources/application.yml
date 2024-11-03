@@ -1,0 +1,12 @@
+server:
+  port: 9091
+
+
+rpc:
+  server:
+    host: 127.0.0.1
+    port: 6666
+
+spring:
+  application:
+    name: rpc-provider
