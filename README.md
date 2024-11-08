@@ -945,10 +945,60 @@ new Decoder(Request)
 以上就是数据库路由组件的设计思路
 
 ## AOP 设计
-TODO
+在 AOP 中扰动的计算方式如下：
+```java
+// 库表总数
+int size = dbRouterConfig.getDbCount() * dbRouterConfig.getTbCount();
+// 扰动函数
+int idx = (size - 1) & (dbKeyAttr.hashCode() ^ (dbKeyAttr.hashCode() >>> 16));
+```
+
+根据上述计算得到的扰动结果 idx，再计算得到库表对应的序列即可，这个计算比较简单，即将 0 ～ 7 对应到对应的库表 db01, db02 的 4 张表中即可
 
 ## 动态数据源类
-TODO
+动态数据源类是利用 Spring 框架提供的 `AbstractRoutingDataSource` 来实现的，继承这个抽象类，并重写 "determineCurrentLookupKey" 方法来实现数据源的选择。当然在配置类中还需要创建 "dataSource" Bean，给其赋值 Map 结构的数据源，如下：
+
+```java
+import org.springframework.context.annotation.Configuration;
+
+import java.util.HashMap;
+
+public class DynamicDataSource extends AbstractRoutingDataSource {
+   @Override
+   protected Object determineCurrentLookupKey() {
+      // 从线程变量获取库索引
+   }
+}
+
+@Configuration
+public class Config {
+   @Bean
+   public DataSource dataSource() {
+      Map<String, Object> targetDataSources = new HashMap();
+      // 设置数据源
+      DynamicDataSource dynamicDataSource = new DynamicDataSource();
+      dynamicDataSource.setTargetDataSources(targetDataSources);
+      return dynamicDataSource;
+   }
+}
+```
 
 ## sql 参数类
-TODO
+这里我们通过一个类 `DBRouterBase` 来表示所有用来给 sql 查询的参数类的基类，该类包含表索引，如下，其他所有的参数查询类都继承该类：
+```java
+public class DBRouterBase {
+    private String tbIdx;
+    public String getTbIdx() {
+        // 从线程变量中获取表索引
+    }
+}
+```
+然后我们的 sql 语句中会带上表索引，如下：
+```xml
+<select id="queryUserInfoByUserId" parameterType="cn.bugstack.middleware.test.infrastructure.po.User"
+        resultType="cn.bugstack.middleware.test.infrastructure.po.User">
+    SELECT id, userId, userNickName, userHead, userPassword, createTime
+    FROM user_${tbIdx}
+    where userId = #{userId}
+</select> 
+```

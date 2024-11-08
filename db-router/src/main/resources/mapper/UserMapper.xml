@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.aric.middleware.dbrouter.mapper.UserMapper">
+    <select id="queryUser" parameterType="com.aric.middleware.dbrouter.pojo.User" resultType="com.aric.middleware.dbrouter.pojo.User">
+        select * from user_${tbIdx} where userId = #{userId}
+    </select>
+
+    <insert id="insertInto" parameterType="com.aric.middleware.dbrouter.pojo.User">
+        insert into user_${tbIdx} (id, userId, userNickName, userHead, userPassword,createTime, updateTime)
+        values (#{id},#{userId},#{userNickName},#{userHead},#{userPassword},now(),now())
+    </insert>
+</mapper>
