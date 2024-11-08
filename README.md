@@ -1002,3 +1002,49 @@ public class DBRouterBase {
     where userId = #{userId}
 </select> 
 ```
+
+# Redis 封装
+我们知道 mybatis 的使用很方便，直接通过接口就可以进行sql操作，不需要具体的实现类，当然这是因为 mybatis 内部帮我们实现了一个代理类，本章我们也用代理的思想封装 redis，使其更加方便。最终效果如下：
+```java
+// 定义 redis 操作接口
+@XRedis
+public interface IRedisService {
+
+    String get(String key);
+
+    void set(String key, String val);
+
+}
+
+// 通过接口直接使用 redis
+public class Test {
+   @Resource
+   private IRedisService redisService;
+
+   @Test
+   public void test_set() {
+      redisService.set("b_info_user", "小傅哥，一个并不简单的男人！");
+   }
+
+   @Test
+   public void test_get() {
+      String result = redisService.get("b_info_user");
+      logger.info("获取 Redis key：{} 信息：{}", "b_info_user", result);
+   }    
+}
+```
+上述的 redis 操作的封装本质也是通过代理类来实现。即在 Spring 框架启动的时候，扫描所有 @XRedis 注解的接口，并将其注册为代理类 Bean，当调用这些接口的操作时，直接调用代理类的方法完成操作
+
+整体的实现如下：
+![img.png](doc/images/xredis.png)
+
+## 功能实现
+关键接口解释：
+TODO
+* `InitializingBean`:
+* `BeanFactoryAware`:
+* `ImportBeanDefinitionRegistrar`:
+* `FactoryBean`:
+
+
+
