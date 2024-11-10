@@ -1039,12 +1039,21 @@ public class Test {
 ![img.png](doc/images/xredis.png)
 
 ## 功能实现
-关键接口解释：
-TODO
-* `InitializingBean`:
-* `BeanFactoryAware`:
-* `ImportBeanDefinitionRegistrar`:
-* `FactoryBean`:
+关键接口：
+* `InitializingBean`: 实现这个接口的 bean 可以在 Spring 容器中被完全实例化并且所有的依赖注入完成之后，执行自定义的初始化逻辑
+* `BeanFactoryAware`: 使 Bean 对象能够访问其所属的 BeanFactory 实例，继而可以在运行时访问和操作容器中的其他 Bean。
+* `ImportBeanDefinitionRegistrar`: 实现自定义 Bean 的注册
+* `FactoryBean`: 定制复杂 Bean 对象，比如给 Bean 对象创建代理
+* `PathMatchingResourcePatternResolver`: Spring 中解析资源路径的类，可以支持模式（例如 classpath*: 和 file:）轻松查找到资源
+* `MetadataReader`: 以一种轻量级和高效的方式读取类的元数据，而无需将类加载到 JVM，这对于性能和内存利用率是很重要的，因为加载类会触发静态初始化和其他副作用
+* `SimpleMetadataReaderFactory`: 这是 MetadataReaderFactory 的一个简单实现，通常用于直接获取特定类的 MetadataReader
+* `ScannedGenericBeanDefinition`: 主要用于在类路径扫描过程中定义和注册 Bean
 
+## Jedis 初始化
+我们通过 JedisPoolConfig 连接池来初始化 redis 连接，提高性能
 
+## Bean 对象的注册
+我们需要扫描所有类文件，并将被注解标注的类过滤出来，将其自定义注册到 Spring 容器中
 
+## 代理类实现
+代理类中会实际调用 redis 进行操作，并将结果返回
