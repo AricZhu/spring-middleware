@@ -1057,3 +1057,21 @@ public class Test {
 
 ## 代理类实现
 代理类中会实际调用 redis 进行操作，并将结果返回
+
+# 分布式任务调度
+在日常业务场景中，我们经常需要一个独立的任务调度模块用来做一些后台操作，比如定时扫描数据库的表，异步任务的处理等。随着数据量的增大，传统的单机单任务的性能无法满足处理大量数据的要求了，因此我们需要分布式任务来完成这些复杂任务。 本章我们来实现分布式任务调度能力。整体的架构设计如下：
+![img.png](doc/images/distribute-task.png)
+
+## 功能设计
+### 自动配置设计
+自动配置模块中涉及到如何接口，用来实现初始化等操作：
+* `ApplicationContextAware`: 它允许Bean获取到创建它的ApplicationContext。通过实现这个接口，你的Bean可以访问到Spring的ApplicationContext，进而能够调用上下文中的其他Bean、发布事件等
+* `BeanPostProcessor`: 它允许你在bean初始化前后插入自定义的逻辑
+* `ApplicationListener`: 用于监听应用程序上下文事件的核心接口之一
+* `ContextRefreshedEvent`: 每当ApplicationContext完成其刷新过程时，即所有的bean都已经被实例化并且所有的依赖关系都已经设置好之后，会发布此事件。对于Web应用来说，这意味着servlet容器已经加载了所有配置，并且web应用程序已经可以处理请求了。开发者可以通过监听此类事件来执行某些初始化后的任务，比如数据预加载、缓存初始化等。
+
+### Zookeeper 功能设计
+TODO
+
+### 任务调度
+TODO
