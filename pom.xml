@@ -28,6 +28,7 @@
 		<module>rpc-consumer</module>
         <module>db-router</module>
         <module>xredis</module>
+        <module>distribute-task</module>
     </modules>
 	<scm>
 		<connection/>
