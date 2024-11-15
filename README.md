@@ -1097,7 +1097,13 @@ client.start();
 创建、删除、监听节点等操作，详情请看类 `ZkCuratorServer`
 
 ### 任务调度
-TODO
+Spring 框架中提供了注解 @Scheduled 来实现定时任务，不过我们这里的不使用 Spring 框架提供的定时任务，而是自己封装实现定时任务。关键类如下：
+* `TaskScheduler`: Spring 提供的调度任务的接口，常用实现如下：
+  * ConcurrentTaskScheduler: 默认使用 JDK 的 ScheduledExecutorService 进行调度
+  * ThreadPoolTaskScheduler: 更强大的实现，基于 ThreadPoolExecutor，支持并发任务调度
+* `CronTask`: 用于调度任务执行，它允许你基于 Cron 表达式来定义复杂的调度规则
+
+具体可看 `SchedulerDemo` 类
 
 ## 程序实现流程
 TODO

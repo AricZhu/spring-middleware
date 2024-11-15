@@ -121,6 +121,8 @@ public class ZkCuratorServer {
             if (null == eventData || eventData.length < 1) return;
             String json = new String(eventData, Constants.Global.CHARSET_NAME);
             if ("".equals(json) || json.indexOf("{") != 0 || json.lastIndexOf("}") + 1 != json.length()) return;
+
+            // TODO
         });
     }
 
