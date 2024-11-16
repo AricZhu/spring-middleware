@@ -1,6 +1,11 @@
 package com.aric.middleware.distributetask.service;
 
 import com.alibaba.fastjson.JSON;
+import com.aric.middleware.distributetask.annotation.SchedulerTaskDesc;
+import com.aric.middleware.distributetask.domain.ExecTask;
+import com.aric.middleware.distributetask.domain.Instruct;
+import com.aric.middleware.distributetask.scheduler.TaskRunnable;
+import com.aric.middleware.distributetask.scheduler.TaskScheduleCtrl;
 import com.aric.middleware.distributetask.utils.Constants;
 import org.apache.curator.RetryPolicy;
 import org.apache.curator.framework.CuratorFramework;
@@ -11,8 +16,10 @@ import org.apache.curator.retry.ExponentialBackoffRetry;
 import org.apache.zookeeper.data.Stat;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
 
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -114,15 +121,48 @@ public class ZkCuratorServer {
         TreeCache treeCache = new TreeCache(client, path);
         treeCache.start();
         treeCache.getListenable().addListener((curatorFramework, event) -> {
-            logger.info("listened event: {}", JSON.toJSONString(event));
-
             if (null == event.getData()) return;
             byte[] eventData = event.getData().getData();
             if (null == eventData || eventData.length < 1) return;
             String json = new String(eventData, Constants.Global.CHARSET_NAME);
             if ("".equals(json) || json.indexOf("{") != 0 || json.lastIndexOf("}") + 1 != json.length()) return;
+            Instruct instruct = JSON.parseObject(json, Instruct.class);
+            logger.info("receive instruct: {}", json);
 
-            // TODO
+            if (!Constants.Global.ip.equals(instruct.getIp())) {
+                return;
+            }
+
+            String beanName = instruct.getBeanName();
+            String methodName = instruct.getMethodName();
+            if (!Constants.execTaskListMap.containsKey(beanName)) {
+                logger.error("无效的 beanName: {}", json);
+                return;
+            }
+            List<ExecTask> execTasks = Constants.execTaskListMap.get(beanName);
+            ExecTask execTask = null;
+            for (ExecTask task : execTasks) {
+                if (task.getMethodName().equals(instruct.getMethodName())) {
+                    execTask = task;
+                    break;
+                }
+            }
+
+            if (null == execTask) {
+                logger.error("无效的 methodName: {}", json);
+                return;
+            }
+
+            TaskScheduleCtrl taskScheduleCtrl = applicationContext.getBean("taskScheduleCtrl", TaskScheduleCtrl.class);
+
+            // 开启任务
+            if (instruct.isStatus()) {
+                logger.info("启动定时任务: {}", execTask.getBeanName() + "." + execTask.getMethodName());
+                taskScheduleCtrl.addTaskSchedule(new TaskRunnable(execTask.getBean(), beanName, methodName), execTask.getCron());
+            } else { // 暂停任务
+                logger.info("关闭定时任务: {}", execTask.getBeanName() + "." + execTask.getMethodName());
+                taskScheduleCtrl.removeTaskSchedule(beanName + "_" + methodName);
+            }
         });
     }
 
